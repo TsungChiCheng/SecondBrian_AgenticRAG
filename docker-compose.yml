@@ -1,0 +1,143 @@
+services:
+  # PostgreSQL Database Service
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-alvin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepass123}
+      POSTGRES_DB: ${POSTGRES_DB:-secondbrain}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./services/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports: ["${POSTGRES_PORT:-5432}:5432"]
+    networks: [microservices]
+
+  # Frontend Service (Port 8000)
+  frontend:
+    build:
+      context: ./services/frontend-service
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      # API endpoint for frontend to connect to
+      API_BASE_URL: ${API_BASE_URL}
+    ports: ["${FRONTEND_PORT:-8000}:8000"]
+    restart: unless-stopped
+    networks: [microservices]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # API Service (Port 8001)
+  api:
+    build:
+      context: ./services/api-service
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      # Database
+      DATABASE_URL: postgres://${POSTGRES_USER:-alvin}:${POSTGRES_PASSWORD:-securepass123}@db:5432/${POSTGRES_DB:-secondbrain}
+      
+      # LLM API Keys
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GROK_API_KEY: ${GROK_API_KEY}
+      
+      # LLM Model Configuration
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-mini}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-3-5-sonnet-20241022}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash-exp}
+      GROK_MODEL: ${GROK_MODEL:-grok-beta}
+      
+      # LLM Settings
+      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0}
+      CLAUDE_TEMPERATURE: ${CLAUDE_TEMPERATURE:-0}
+      GEMINI_TEMPERATURE: ${GEMINI_TEMPERATURE:-0}
+      GROK_TEMPERATURE: ${GROK_TEMPERATURE:-0}
+      
+      # Notion Integration
+      NOTION_TOKEN: ${NOTION_TOKEN}
+      NOTION_DB_ID: ${NOTION_DB_ID}
+      NOTION_DATE_COL: ${NOTION_DATE_COL:-Date}
+      
+      # Server Configuration
+      API_HOST: 0.0.0.0
+      API_PORT: 8001
+    
+    depends_on:
+      db:
+        condition: service_healthy
+      vector:
+        condition: service_healthy
+    
+    ports: ["${API_PORT:-8001}:8001"]
+    restart: unless-stopped
+    networks: [microservices]
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Qdrant Vector Database (Port 6333)
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports: ["${QDRANT_HTTP_PORT:-6333}:6333", "${QDRANT_GRPC_PORT:-6334}:6334"]
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks: [microservices]
+
+  # Vector Database Service (Port 8002)
+  vector:
+    build:
+      context: ./services/vector-service
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      # OpenAI API Key for embeddings
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # Qdrant Configuration
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+    
+    depends_on:
+      - qdrant
+    
+    ports: ["${VECTOR_PORT:-8002}:8002"]
+    restart: unless-stopped
+    networks: [microservices]
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  pgdata:
+    driver: local
+  qdrant_data:
+    driver: local
+
+networks:
+  microservices:
+    driver: bridge

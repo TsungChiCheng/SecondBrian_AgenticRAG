@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Second Brain - AI Knowledge Assistant</title>
+    <link rel="stylesheet" href="static/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+    <!-- D3.js for knowledge graph visualization -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Marked.js for markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- DOMPurify for sanitizing HTML -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1 data-i18n="title">🧠 Second Brain</h1>
+            <p class="header-subtitle" data-i18n="subtitle">
+                Your AI-powered knowledge assistant that learns from multiple AI models
+            </p>
+            <div class="header-controls">
+                <div class="theme-selector">
+                    <span data-i18n="theme">Theme</span>
+                    <div class="theme-radio-group">
+                        <label class="theme-radio-label theme-label-nature">
+                            <input type="radio" name="theme" value="nature" class="theme-radio">
+                            <span data-i18n="theme.nature">Nature</span>
+                        </label>
+                        <label class="theme-radio-label theme-label-sakura">
+                            <input type="radio" name="theme" value="sakura" class="theme-radio">
+                            <span data-i18n="theme.sakura">Sakura</span>
+                        </label>
+                        <label class="theme-radio-label theme-label-cyberpunk">
+                            <input type="radio" name="theme" value="cyberpunk" class="theme-radio" checked>
+                            <span data-i18n="theme.cyberpunk">Cyberpunk</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="language-selector">
+                    <span data-i18n="language">Language</span>
+                    <div class="language-radio-group">
+                        <label class="language-radio-label">
+                            <input type="radio" name="language" value="en" class="language-radio">
+                            <span>English</span>
+                        </label>
+                        <label class="language-radio-label">
+                            <input type="radio" name="language" value="zh_TW" class="language-radio" checked>
+                            <span>繁體中文</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <nav class="tab-navigation">
+            <button class="tab-button active" data-tab="ask" data-i18n="tab.ask" onclick="switchTab('ask')">🤖 Ask AI</button>
+            <button class="tab-button" data-tab="search" data-i18n="tab.search" onclick="switchTab('search')">🔍 Search & Browse</button>
+            <button class="tab-button" data-tab="vocabulary" data-i18n="tab.vocabulary" onclick="switchTab('vocabulary')">📚 Vocabulary</button>
+            <button class="tab-button" data-tab="summary" data-i18n="tab.summary" onclick="switchTab('summary')">📊 Daily Summary</button>
+            <button class="tab-button" data-tab="graph" data-i18n="tab.graph" onclick="switchTab('graph')">🕸️ Knowledge Graph</button>
+        </nav>
+
+        <!-- Tab 1: Ask AI -->
+        <div id="tab-ask" class="tab-content active">
+            <main class="chat-container">
+                <section class="chat-input-section">
+                    <div class="input-group">
+                        <div class="input-wrapper">
+                            <label for="prompt" data-i18n="ask.label">Ask your question or upload an image:</label>
+                            <textarea 
+                                id="prompt" 
+                                data-i18n="ask.placeholder"
+                                placeholder="Ask anything... I'll consult multiple AI models and give you a comprehensive answer.&#10;&#10;Or upload an image below to analyze it!&#10;&#10;Tip: Press Ctrl+Enter to send quickly!"
+                                rows="4"
+                            ></textarea>
+                            
+                            <!-- Image Upload Area -->
+                            <div class="image-upload-area" id="image-upload-area" style="margin-top: 12px;">
+                                <input 
+                                    type="file" 
+                                    id="image-input" 
+                                    accept="image/*"
+                                    style="display: none;"
+                                >
+                                <div id="drop-zone" class="drop-zone-compact">
+                                    <button id="select-image" class="btn-upload" type="button" data-i18n="ask.uploadImage">
+                                        📷 Upload Image (Optional)
+                                    </button>
+                                    <span class="upload-hint" data-i18n="ask.dragDrop">or drag & drop here</span>
+                                </div>
+                                <div id="image-preview" style="display: none; margin-top: 10px;">
+                                    <div style="position: relative; display: inline-block;">
+                                        <img id="preview-img" style="max-width: 200px; max-height: 150px; border-radius: 8px; border: 2px solid #e2e8f0;">
+                                        <button id="clear-image" class="btn-clear-image" title="Remove image">
+                                            ❌
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- LLM Selection Checkboxes (hidden: Agentic decides models) -->
+                            <div class="llm-selection" style="display: none;">
+                                <label class="selection-label" data-i18n="ask.selectModels">Select AI Models to Use:</label>
+                                <div class="checkbox-grid">
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="openai-check" checked>
+                                        <span class="checkmark openai"></span>
+                                        <span class="model-name" data-i18n="model.openai">OpenAI</span>
+                                    </label>
+                                    <!-- Claude checkbox hidden but API code retained -->
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="claude-check" checked>
+                                        <span class="checkmark claude"></span>
+                                        <span class="model-name" data-i18n="model.claude">Claude</span>
+                                    </label>
+                                    
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="gemini-check" checked>
+                                        <span class="checkmark gemini"></span>
+                                        <span class="model-name" data-i18n="model.gemini">Gemini</span>
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="grok-check" checked>
+                                        <span class="checkmark grok"></span>
+                                        <span class="model-name" data-i18n="model.grok">Grok</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="button-group">
+                            <button id="send" class="btn-primary" data-i18n="ask.send">
+                                Send
+                            </button>
+                            <button id="new-session" class="btn-secondary" title="End current chat and start a new one">
+                                New Session
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="results-section">
+                    <!-- Summary (visible) -->
+                    <div class="result-card">
+                        <h3 data-i18n="ask.summaryTitle">📋 Summary & Consensus</h3>
+                        <div id="summary" class="summary-content" data-i18n="ask.summaryPlaceholder">(Ask a question or upload an image to see the AI consensus summary)</div>
+                    </div>
+
+                    <!-- Individual Answers -->
+                    <div class="result-card">
+                        <h3 data-i18n="ask.responsesTitle">🤖 AI Model Responses</h3>
+                        <div id="answers" class="answers-content">
+                            <div class="answer-item" data-i18n="ask.responsesPlaceholder"></div>
+                        </div>
+                    </div>
+
+                    <!-- Image Analysis Results (shown when image is analyzed) -->
+                    <div id="image-analysis-results" class="result-card" style="display: none;">
+                        <h3 data-i18n="ask.imageAnalysisTitle">🖼️ Image Analysis & Search</h3>
+                        <div id="image-results-content"></div>
+                    </div>
+
+                    <!-- Status Messages -->
+                    <div id="status"></div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Tab 2: Search & Browse -->
+        <div id="tab-search" class="tab-content">
+            <section class="tools-section">
+                <div class="tools-grid">
+                    <!-- Smart Search -->
+                    <div class="tool-card">
+                        <h3 data-i18n="search.smartTitle">🧠 Smart Search</h3>
+                        <p data-i18n="search.smartDesc">Search through your accumulated knowledge base using natural language</p>
+                        <input 
+                            type="text" 
+                            id="search-query" 
+                            class="date-input"
+                            data-i18n="search.placeholder"
+                            placeholder="Search your knowledge..."
+                        >
+                        <button id="vector-search" class="btn-primary" data-i18n="search.button">
+                            🔍 Search Knowledge
+                        </button>
+                        <div id="search-status"></div>
+                        <div id="search-results" class="tool-results"></div>
+                    </div>
+
+                    <!-- Topic Browser -->
+                    <div class="tool-card">
+                        <h3 data-i18n="search.topicsTitle">🏷️ Browse Topics</h3>
+                        <p data-i18n="search.topicsDesc">Explore all topics in your knowledge base</p>
+                        <button id="load-topics" class="btn-primary" data-i18n="search.topicsButton">
+                            📋 Load All Topics
+                        </button>
+                        <div id="topics-status"></div>
+                        <div id="topics-results" class="tool-results"></div>
+                    </div>
+
+                    <!-- Knowledge Stats -->
+                    <div class="tool-card">
+                        <h3 data-i18n="search.statsTitle">📈 Knowledge Stats</h3>
+                        <p data-i18n="search.statsDesc">View statistics about your knowledge base</p>
+                        <button id="load-stats" class="btn-primary" data-i18n="search.statsButton">
+                            📊 Load Stats
+                        </button>
+                        <div id="stats-status"></div>
+                        <div id="stats-results" class="tool-results"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Tab 3: Vocabulary Memory -->
+        <div id="tab-vocabulary" class="tab-content">
+            <section class="tools-section">
+                <!-- Learn New Word (Full Width) -->
+                <div class="tool-card full-width">
+                    <h3>🤖 Learn New Word</h3>
+                    <p>Enter a word and let AI teach you its definition, pronunciation, and usage</p>
+                    
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; align-items: end;">
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Word to Learn</label>
+                            <input 
+                                type="text" 
+                                id="vocab-learn-word" 
+                                class="date-input"
+                                placeholder="e.g., apple, serendipity, computer..."
+                            >
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Language</label>
+                            <select id="vocab-learn-language" class="date-input">
+                                <option value="english">English</option>
+                                <option value="chinese">Chinese</option>
+                                <option value="spanish">Spanish</option>
+                                <option value="french">French</option>
+                                <option value="german">German</option>
+                                <option value="japanese">Japanese</option>
+                            </select>
+                        </div>
+                        <button id="vocab-learn-btn" class="btn-primary" style="margin: 0;">
+                            🎓 Learn Word
+                        </button>
+                    </div>
+                    
+                    <div id="vocab-learn-status" style="margin-top: 10px;"></div>
+                    <div id="vocab-learn-result" class="tool-results" style="margin-top: 15px;"></div>
+                </div>
+
+                <div class="tools-grid">
+                    <!-- Daily Review Words - Full Width -->
+                    <div class="tool-card full-width">
+                        <h3 data-i18n="vocab.reviewTitle">📖 Daily Review</h3>
+                        <p data-i18n="vocab.reviewDesc">Get words due for review based on spaced repetition</p>
+                        
+                        <!-- Today's Activity Section -->
+                        <div style="margin: 15px 0; padding: 15px; background: rgba(100, 181, 246, 0.1); border-radius: 8px; border-left: 4px solid #64b5f6;">
+                            <h4 style="margin: 0 0 10px 0; color: #64b5f6;">📅 Recent Activity (Last 24 Hours)</h4>
+                            <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">View all vocabulary words you've learned in the last 24 hours</p>
+                            <button class="btn-secondary" onclick="loadTodayActivity()">
+                                🔍 Show Recent Words
+                            </button>
+                            <div id="today-activity-results" style="max-height: 300px; overflow-y: auto; margin-top: 10px;"></div>
+                        </div>
+                        
+                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #e0e0e0;">
+                        
+                        <h4 style="margin: 15px 0 10px 0;">📚 Spaced Repetition Review</h4>
+                        <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">Review all vocabulary words that are due today using the SM-2 spaced repetition algorithm</p>
+                        <button id="vocab-review-btn" class="btn-primary" data-i18n="vocab.reviewButton">
+                            📚 Show All Words Due for Review
+                        </button>
+                        <div id="vocab-review-status"></div>
+                        <div id="vocab-review-results" class="tool-results">
+                            <div id="review-flashcards" style="display: none;">
+                                <!-- Flashcard will be rendered here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Word Distance Visualization -->
+                    <div class="tool-card full-width">
+                        <h3 data-i18n="vocab.distanceTitle">🎯 Word Relationships</h3>
+                        <p data-i18n="vocab.distanceDesc">Visualize semantic relationships between words using embeddings</p>
+                        
+                        <!-- Search History Section -->
+                        <div style="margin: 15px 0; padding: 15px; background: rgba(124, 58, 237, 0.1); border-radius: 8px; border-left: 4px solid #7c3aed;">
+                            <h4 style="margin: 0 0 10px 0; color: #7c3aed;">🔍 My Search History</h4>
+                            <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">View all words you've searched for relationship visualization</p>
+                            <button class="btn-secondary" onclick="loadRelationshipHistory()">
+                                📋 Show All My Searches
+                            </button>
+                            <div id="relationship-history-results" style="max-height: 300px; overflow-y: auto; margin-top: 10px;"></div>
+                        </div>
+                        
+                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #e0e0e0;">
+                        
+                        <h4 style="margin: 15px 0 10px 0;">🕸️ Visualize Word Relationships</h4>
+                        <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">Explore semantic connections between vocabulary words</p>
+                        <input 
+                            type="text" 
+                            id="vocab-center-word" 
+                            class="date-input"
+                            data-i18n="vocab.centerWordPlaceholder"
+                            placeholder="Enter a word to see related words..."
+                        >
+                        <button id="vocab-distance-btn" class="btn-primary" data-i18n="vocab.distanceButton">
+                            🌐 Show Word Relationships
+                        </button>
+                        <div id="vocab-distance-status"></div>
+                        <div id="vocab-distance-visualization" class="graph-container" style="display: none; margin-top: 20px;">
+                            <div class="graph-controls">
+                                <button id="vocab-zoom-in" class="btn-secondary">🔍+ Zoom In</button>
+                                <button id="vocab-zoom-out" class="btn-secondary">🔍- Zoom Out</button>
+                                <button id="vocab-center" class="btn-secondary">🎯 Center</button>
+                                <button id="vocab-close-viz" class="btn-secondary">❌ Close</button>
+                            </div>
+                            <div id="vocab-graph-viz"></div>
+                            <div id="vocab-graph-info"></div>
+                        </div>
+                    </div>
+
+                    <!-- Vocabulary Statistics -->
+                    <div class="tool-card">
+                        <h3 data-i18n="vocab.statsTitle">📊 My Vocabulary Stats</h3>
+                        <p data-i18n="vocab.statsDesc">View your vocabulary learning progress and statistics</p>
+                        <button id="vocab-stats-btn" class="btn-primary" data-i18n="vocab.statsButton">
+                            📈 Show Statistics
+                        </button>
+                        <div id="vocab-stats-status"></div>
+                        <div id="vocab-stats-results" class="tool-results"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Tab 4: Daily Summary -->
+        <div id="tab-summary" class="tab-content">
+            <section class="tools-section">
+                <div class="tools-grid">
+                    <!-- Daily Summarizer -->
+                    <div class="tool-card">
+                        <h3 data-i18n="summary.dailyTitle">📊 Daily Summary</h3>
+                        <p data-i18n="summary.dailyDesc">Summarize your daily Q&A sessions and insights</p>
+                        <input 
+                            type="date" 
+                            id="day-input" 
+                            class="date-input"
+                            data-i18n="summary.dateLabel"
+                            title="Select date to summarize"
+                        >
+                        <button id="summarize" class="btn-primary" data-i18n="summary.button">
+                            📊 Summarize Day
+                        </button>
+                        <div id="summarize-status"></div>
+                        <div id="summary-results" class="tool-results"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Tab 5: Knowledge Graph -->
+        <div id="tab-graph" class="tab-content">
+            <section class="tools-section">
+                <div class="tool-card full-width">
+                    <h3 data-i18n="graph.title">🕸️ Knowledge Graph</h3>
+                    <p data-i18n="graph.desc">Interactive visualization of concept relationships in your knowledge base</p>
+                    <button id="show-graph" class="btn-primary" data-i18n="graph.button">
+                        🌐 Show Knowledge Graph
+                    </button>
+                    <div id="graph-status"></div>
+                    <div id="knowledge-graph" class="graph-container" style="display: none;">
+                        <div class="graph-controls">
+                            <button id="zoom-in-graph" class="btn-secondary" data-i18n="graph.zoomIn">🔍+ Zoom In</button>
+                            <button id="zoom-out-graph" class="btn-secondary" data-i18n="graph.zoomOut">🔍- Zoom Out</button>
+                            <button id="center-graph" class="btn-secondary" data-i18n="graph.center">🎯 Center</button>
+                            <button id="close-graph" class="btn-secondary" data-i18n="graph.close">❌ Close</button>
+                        </div>
+                        <div id="graph-visualization"></div>
+                        <div id="graph-info"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Footer -->
+        <footer style="text-align: center; margin-top: 3rem; color: var(--text-secondary); font-size: 0.9rem;">
+            <p data-i18n="footer.text">Powered by multiple AI models • Built with ❤️ for knowledge workers</p>
+        </footer>
+    </div>
+
+    <!-- JavaScript -->
+    <!-- Load authentication first -->
+    <script src="static/auth.js"></script>
+    <!-- Load configuration -->
+    <script src="/config.js"></script>
+    <!-- Load internationalization -->
+    <script src="static/i18n.js?v=20251020e"></script>
+    <!-- Load theme system -->
+    <script src="static/themes.js?v=20251020e"></script>
+    <!-- Inline theme radio handler - loads FIRST for immediate response -->
+    <script>
+        // This runs immediately when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🎨 DOM loaded, initializing theme radios...');
+            
+            // Get all theme radio buttons
+            const themeRadios = document.querySelectorAll('.theme-radio');
+            console.log('🎨 Found theme radios:', themeRadios.length);
+            
+            // Set initial checked state based on saved theme
+            if (window.themeManager) {
+                const currentTheme = window.themeManager.currentTheme;
+                themeRadios.forEach(radio => {
+                    radio.checked = (radio.value === currentTheme);
+                });
+            }
+            
+            // Add change handlers
+            themeRadios.forEach((radio, index) => {
+                console.log(`  Radio ${index}: ${radio.value}`);
+                
+                radio.addEventListener('change', function(e) {
+                    if (e.target.checked) {
+                        const themeName = radio.value;
+                        console.log('🎨🎨🎨 THEME RADIO CHANGED:', themeName);
+                        
+                        if (window.themeManager) {
+                            console.log('  ✅ ThemeManager found, applying theme...');
+                            window.themeManager.setTheme(themeName);
+                            console.log('  ✅✅✅ Theme applied successfully!');
+                        } else {
+                            console.error('  ❌ ThemeManager not found!');
+                        }
+                    }
+                });
+            });
+            
+            console.log('✅ Theme radios initialized');
+        });
+    </script>
+    <!-- Then load application with cache busting -->
+    <script src="static/app.js?v=20250129c"></script>
+    <script>
+        // Inline tab switching function - loads immediately
+        function switchTab(tabName) {
+            console.log('🎯 Switching to tab:', tabName);
+            
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+                console.log('  Hiding:', content.id);
+            });
+            
+            // Remove active from all buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            const targetContent = document.getElementById(`tab-${tabName}`);
+            if (targetContent) {
+                targetContent.classList.add('active');
+                console.log('  ✅ Showing:', targetContent.id);
+            } else {
+                console.error('  ❌ Tab content not found:', `tab-${tabName}`);
+            }
+            
+            // Activate clicked button
+            const targetButton = document.querySelector(`[data-tab="${tabName}"]`);
+            if (targetButton) {
+                targetButton.classList.add('active');
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('activeTab', tabName);
+        }
+        
+        // Make it globally available immediately
+        window.switchTab = switchTab;
+        console.log('✅ switchTab() function is ready');
+        
+        // Inline tab test function - always available
+        function quickTabTest() {
+            console.log('=== Quick Tab Test ===');
+            const buttons = document.querySelectorAll('.tab-button');
+            const contents = document.querySelectorAll('.tab-content');
+            console.log('Buttons found:', buttons.length);
+            console.log('Contents found:', contents.length);
+            
+            buttons.forEach((btn, i) => {
+                console.log(`Button ${i}:`, {
+                    tab: btn.getAttribute('data-tab'),
+                    hasActive: btn.classList.contains('active'),
+                    html: btn.innerHTML.substring(0, 20)
+                });
+            });
+            
+            contents.forEach((content, i) => {
+                const style = window.getComputedStyle(content);
+                console.log(`Content ${i}:`, {
+                    id: content.id,
+                    hasActive: content.classList.contains('active'),
+                    display: style.display,
+                    visibility: style.visibility
+                });
+            });
+            
+            return 'Test complete - check console output above';
+        }
+        
+        // Make it globally available immediately
+        window.quickTabTest = quickTabTest;
+        console.log('✅ quickTabTest() function is ready - type it in console to run');
+    </script>
+    
+    <!-- Vocabulary Feature Script -->
+        <script src="/static/vocabulary.js?v=20251026x"></script>
+</body>
+</html>

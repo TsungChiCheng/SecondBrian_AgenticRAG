@@ -1,0 +1,32 @@
+# Web framework & HTTP
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+httpx==0.27.0
+
+# Authentication
+PyJWT[crypto]==2.8.0
+
+# Data-validation / settings
+pydantic==2.7.4
+python-dotenv==1.0.1
+pydantic-settings==2.10.1
+
+# LLM support (pinned to avoid pip backtracking blow‑ups)
+openai==1.109.1
+
+# LangGraph and LangChain for Agentic RAG (versions known to co-install cleanly)
+langgraph==1.0.8
+langchain-core==1.2.9
+langchain-openai==1.1.7
+langchain-community==0.4.1
+langchain-text-splitters==1.1.0
+
+# Database support
+asyncpg==0.29.0
+
+# Notion SDK
+notion-client==2.2.1
+
+# Vector Database (using service instead)
+# chromadb==0.5.17              
+# sentence-transformers==3.2.0

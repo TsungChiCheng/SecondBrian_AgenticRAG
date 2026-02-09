@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vocabulary Memory - Second Brain</title>
+    <link rel="stylesheet" href="static/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+    <!-- D3.js for visualization -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* Vocabulary-specific styles */
+        .vocab-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .vocab-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 30px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            color: white;
+        }
+
+        .vocab-header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .vocab-header p {
+            margin: 10px 0 0;
+            opacity: 0.9;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+
+        .back-link:hover {
+            background: #5568d3;
+        }
+
+        .vocab-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e2e8f0;
+            flex-wrap: wrap;
+        }
+
+        .vocab-tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            color: #64748b;
+            transition: all 0.3s;
+        }
+
+        .vocab-tab:hover {
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .vocab-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .vocab-tab-content {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+
+        .vocab-tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Search Section */
+        .search-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .search-filters {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .filter-select {
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-secondary {
+            padding: 10px 20px;
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-secondary:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toggle-switch input[type="checkbox"] {
+            width: 50px;
+            height: 26px;
+            position: relative;
+            appearance: none;
+            background: #cbd5e0;
+            border-radius: 13px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch input[type="checkbox"]:checked {
+            background: #667eea;
+        }
+
+        .toggle-switch input[type="checkbox"]::before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            top: 3px;
+            left: 3px;
+            transition: transform 0.3s;
+        }
+
+        .toggle-switch input[type="checkbox"]:checked::before {
+            transform: translateX(24px);
+        }
+
+        /* Vocabulary Cards */
+        .vocab-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .vocab-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+        }
+
+        .vocab-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .vocab-word {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+
+        .vocab-pronunciation {
+            color: #64748b;
+            font-style: italic;
+            margin-bottom: 12px;
+        }
+
+        .vocab-definition {
+            color: #334155;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .vocab-example {
+            background: #f8fafc;
+            padding: 10px;
+            border-left: 3px solid #667eea;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            font-style: italic;
+            color: #475569;
+        }
+
+        .vocab-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .vocab-tag {
+            padding: 4px 12px;
+            background: #e0e7ff;
+            color: #4338ca;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .vocab-tag.difficulty-beginner { background: #d1fae5; color: #065f46; }
+        .vocab-tag.difficulty-intermediate { background: #fed7aa; color: #92400e; }
+        .vocab-tag.difficulty-advanced { background: #fecaca; color: #991b1b; }
+
+        .vocab-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .btn-action {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: opacity 0.2s;
+        }
+
+        .btn-action:hover {
+            opacity: 0.8;
+        }
+
+        .btn-review {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-edit {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-delete {
+            background: #ef4444;
+            color: white;
+        }
+
+        .review-count {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 8px;
+        }
+
+        /* Word Distance Visualization */
+        #word-distance-viz {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            min-height: 600px;
+            position: relative;
+        }
+
+        .viz-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+
+        /* Stats Section */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #64748b;
+            margin-top: 8px;
+        }
+
+        /* Loading & Empty States */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #64748b;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .vocab-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .search-box {
+                flex-direction: column;
+            }
+
+            .vocab-header h1 {
+                font-size: 2em;
+            }
+        }
+
+        /* Add Word Form */
+        .add-word-form {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #334155;
+        }
+
+        .form-input,
+        .form-textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .related-words-input {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+
+        .related-word-tag {
+            padding: 6px 12px;
+            background: #e0e7ff;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .remove-tag {
+            cursor: pointer;
+            color: #4338ca;
+            font-weight: bold;
+        }
+
+        .similarity-score {
+            font-size: 12px;
+            color: #10b981;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="vocab-container">
+        <!-- Back to Main -->
+        <a href="index.html" class="back-link">← Back to Second Brain</a>
+
+        <!-- Header -->
+        <div class="vocab-header">
+            <h1>📚 Vocabulary Memory</h1>
+            <p>Build, search, and master your vocabulary with AI-powered semantic search and spaced repetition</p>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="vocab-tabs">
+            <button class="vocab-tab active" onclick="switchVocabTab('search')">🔍 Search Words</button>
+            <button class="vocab-tab" onclick="switchVocabTab('review')">📅 Daily Review</button>
+            <button class="vocab-tab" onclick="switchVocabTab('distance')">🎯 Word Relations</button>
+            <button class="vocab-tab" onclick="switchVocabTab('add')">➕ Add Word</button>
+            <button class="vocab-tab" onclick="switchVocabTab('stats')">📊 Statistics</button>
+        </div>
+
+        <!-- Tab 1: Search Words -->
+        <div id="tab-search" class="vocab-tab-content active">
+            <div class="search-section">
+                <h2>🔍 Search Your Vocabulary</h2>
+                <div class="search-box">
+                    <input 
+                        type="text" 
+                        id="search-input" 
+                        class="search-input" 
+                        placeholder="Search by word or meaning (e.g., 'happiness', 'temporary', 'lucky coincidence')..."
+                    >
+                    <button class="btn-primary" onclick="searchVocabulary()">Search</button>
+                </div>
+
+                <div class="search-filters">
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="semantic-search" checked>
+                        <label for="semantic-search">🧠 Semantic Search (AI-powered)</label>
+                    </div>
+                    
+                    <select id="filter-language" class="filter-select">
+                        <option value="">All Languages</option>
+                        <option value="english">English</option>
+                        <option value="chinese">Chinese</option>
+                        <option value="french">French</option>
+                        <option value="spanish">Spanish</option>
+                        <option value="japanese">Japanese</option>
+                    </select>
+
+                    <select id="filter-difficulty" class="filter-select">
+                        <option value="">All Difficulties</option>
+                        <option value="beginner">Beginner</option>
+                        <option value="intermediate">Intermediate</option>
+                        <option value="advanced">Advanced</option>
+                    </select>
+
+                    <button class="btn-secondary" onclick="loadAllVocabulary()">Show All</button>
+                </div>
+            </div>
+
+            <!-- Search Results -->
+            <div id="search-results"></div>
+        </div>
+
+        <!-- Tab 2: Daily Review -->
+        <div id="tab-review" class="vocab-tab-content">
+            <div class="search-section">
+                <h2>📅 Words Due for Review</h2>
+                <p>Spaced repetition helps you remember vocabulary effectively. Review these words to strengthen your memory!</p>
+                <div style="margin-top: 15px;">
+                    <label for="review-limit">Number of words to review:</label>
+                    <select id="review-limit" class="filter-select" style="margin-left: 10px;">
+                        <option value="5">5 words</option>
+                        <option value="10" selected>10 words</option>
+                        <option value="20">20 words</option>
+                        <option value="50">50 words</option>
+                    </select>
+                    <button class="btn-primary" onclick="loadReviewWords()" style="margin-left: 10px;">Load Review Words</button>
+                </div>
+            </div>
+
+            <div id="review-results"></div>
+        </div>
+
+        <!-- Tab 3: Word Distance Visualization -->
+        <div id="tab-distance" class="vocab-tab-content">
+            <div class="search-section">
+                <h2>🎯 Word Relations by Embedding Distance</h2>
+                <p>Visualize semantic relationships between your vocabulary words using AI embeddings</p>
+                
+                <div class="viz-controls">
+                    <input 
+                        type="text" 
+                        id="center-word" 
+                        class="search-input" 
+                        placeholder="Enter a word to find related vocabulary..."
+                        style="flex: 1;"
+                    >
+                    <button class="btn-primary" onclick="visualizeWordDistance()">Visualize Relations</button>
+                    <button class="btn-secondary" onclick="loadAllWordRelations()">Show All Words</button>
+                </div>
+
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #667eea;"></div>
+                        <span>Query Word</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #10b981;"></div>
+                        <span>Very Similar (>0.8)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f59e0b;"></div>
+                        <span>Similar (0.6-0.8)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #94a3b8;"></div>
+                        <span>Related (0.4-0.6)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="word-distance-viz"></div>
+        </div>
+
+        <!-- Tab 4: Add Word -->
+        <div id="tab-add" class="vocab-tab-content">
+            <div class="add-word-form">
+                <h2>➕ Add New Vocabulary</h2>
+                <form id="add-word-form" onsubmit="addVocabulary(event)">
+                    <div class="form-group">
+                        <label class="form-label">Word *</label>
+                        <input type="text" id="new-word" class="form-input" required placeholder="e.g., serendipity">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Pronunciation</label>
+                        <input type="text" id="new-pronunciation" class="form-input" placeholder="e.g., /ˌserənˈdipədē/ or ser-en-DIP-i-tee">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Definition *</label>
+                        <textarea id="new-definition" class="form-textarea" required placeholder="The occurrence of events by chance in a happy or beneficial way"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Sample Sentence</label>
+                        <textarea id="new-sample" class="form-textarea" placeholder="Finding that old book was pure serendipity."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Related Words (press Enter after each word)</label>
+                        <input type="text" id="new-related-input" class="form-input" placeholder="e.g., chance, fortune, luck...">
+                        <div id="related-words-display" class="related-words-input"></div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Language</label>
+                            <select id="new-language" class="form-input">
+                                <option value="english">English</option>
+                                <option value="chinese">Chinese</option>
+                                <option value="french">French</option>
+                                <option value="spanish">Spanish</option>
+                                <option value="japanese">Japanese</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Difficulty</label>
+                            <select id="new-difficulty" class="form-input">
+                                <option value="">Not specified</option>
+                                <option value="beginner">Beginner</option>
+                                <option value="intermediate">Intermediate</option>
+                                <option value="advanced">Advanced</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Tags (comma-separated)</label>
+                        <input type="text" id="new-tags" class="form-input" placeholder="e.g., nouns, abstract, happiness">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Notes</label>
+                        <textarea id="new-notes" class="form-textarea" placeholder="Additional context, etymology, or personal notes..."></textarea>
+                    </div>
+
+                    <button type="submit" class="btn-primary" style="width: 100%;">Add to Vocabulary</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tab 5: Statistics -->
+        <div id="tab-stats" class="vocab-tab-content">
+            <div class="search-section">
+                <h2>📊 Vocabulary Statistics</h2>
+                <button class="btn-primary" onclick="loadStats()">Refresh Statistics</button>
+            </div>
+
+            <div id="stats-display"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE_URL = '/api';
+        let authToken = localStorage.getItem('auth_token');
+        let relatedWords = [];
+
+        // Check authentication
+        if (!authToken) {
+            alert('Please log in first!');
+            window.location.href = 'login.html';
+        }
+
+        // Tab switching
+        function switchVocabTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.vocab-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.vocab-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+
+            // Load data for specific tabs
+            if (tabName === 'search') {
+                loadAllVocabulary();
+            } else if (tabName === 'review') {
+                loadReviewWords();
+            } else if (tabName === 'stats') {
+                loadStats();
+            }
+        }
+
+        // Search vocabulary
+        async function searchVocabulary() {
+            const query = document.getElementById('search-input').value.trim();
+            if (!query) {
+                alert('Please enter a search query');
+                return;
+            }
+
+            const useSemanticSearch = document.getElementById('semantic-search').checked;
+            const language = document.getElementById('filter-language').value;
+            const difficulty = document.getElementById('filter-difficulty').value;
+
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = '<div class="loading">🔍 Searching...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/vocabulary/search`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        use_semantic_search: useSemanticSearch,
+                        language: language || null,
+                        difficulty: difficulty || null,
+                        limit: 20
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Search failed');
+                }
+
+                const data = await response.json();
+                displaySearchResults(data.results);
+            } catch (error) {
+                console.error('Search error:', error);
+                resultsDiv.innerHTML = `<div class="empty-state">❌ Search failed: ${error.message}</div>`;
+            }
+        }
+
+        // Display search results
+        function displaySearchResults(results) {
+            const resultsDiv = document.getElementById('search-results');
+            
+            if (!results || results.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔍</div>
+                        <p>No vocabulary found matching your search.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = `
+                <h3 style="margin-bottom: 20px;">Found ${results.length} result(s)</h3>
+                <div class="vocab-grid">
+                    ${results.map(result => createVocabCard(result.entry, result.relevance_score)).join('')}
+                </div>
+            `;
+            resultsDiv.innerHTML = html;
+        }
+
+        // Create vocabulary card HTML
+        function createVocabCard(vocab, score = null) {
+            const difficultyClass = vocab.difficulty ? `difficulty-${vocab.difficulty}` : '';
+            const scoreHtml = score ? `<span class="similarity-score">Match: ${(score * 100).toFixed(0)}%</span>` : '';
+            
+            return `
+                <div class="vocab-card">
+                    <div class="vocab-word">${vocab.word}${scoreHtml}</div>
+                    ${vocab.pronunciation ? `<div class="vocab-pronunciation">${vocab.pronunciation}</div>` : ''}
+                    <div class="vocab-definition">${vocab.definition}</div>
+                    ${vocab.sample_sentence ? `<div class="vocab-example">💬 "${vocab.sample_sentence}"</div>` : ''}
+                    ${vocab.related_words && vocab.related_words.length > 0 ? `
+                        <div style="margin-top: 12px;">
+                            <strong>Related:</strong> ${vocab.related_words.join(', ')}
+                        </div>
+                    ` : ''}
+                    <div class="vocab-meta">
+                        ${vocab.language ? `<span class="vocab-tag">🌍 ${vocab.language}</span>` : ''}
+                        ${vocab.difficulty ? `<span class="vocab-tag ${difficultyClass}">📊 ${vocab.difficulty}</span>` : ''}
+                        ${vocab.tags ? vocab.tags.map(tag => `<span class="vocab-tag">🏷️ ${tag}</span>`).join('') : ''}
+                    </div>
+                    <div class="review-count">
+                        📝 Reviewed ${vocab.review_count} time(s)
+                        ${vocab.last_reviewed ? `| Last: ${new Date(vocab.last_reviewed).toLocaleDateString()}` : ''}
+                    </div>
+                    <div class="vocab-actions">
+                        <button class="btn-action btn-review" onclick="markAsReviewed(${vocab.id})">✓ Reviewed</button>
+                        <button class="btn-action btn-edit" onclick="showRelatedWords(${vocab.id})">🔗 Related</button>
+                        <button class="btn-action btn-delete" onclick="deleteVocab(${vocab.id})">🗑️ Delete</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Load all vocabulary
+        async function loadAllVocabulary() {
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = '<div class="loading">📚 Loading vocabulary...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/vocabulary/list`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        limit: 50,
+                        offset: 0
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load vocabulary');
+                }
+
+                const data = await response.json();
+                displayAllVocabulary(data.data);
+            } catch (error) {
+                console.error('Load error:', error);
+                resultsDiv.innerHTML = `<div class="empty-state">❌ Failed to load: ${error.message}</div>`;
+            }
+        }
+
+        // Display all vocabulary
+        function displayAllVocabulary(vocabList) {
+            const resultsDiv = document.getElementById('search-results');
+            
+            if (!vocabList || vocabList.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📚</div>
+                        <p>Your vocabulary is empty. Start adding words!</p>
+                        <button class="btn-primary" onclick="switchVocabTab('add')">Add Your First Word</button>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = `
+                <h3 style="margin-bottom: 20px;">Your Vocabulary (${vocabList.length} words)</h3>
+                <div class="vocab-grid">
+                    ${vocabList.map(vocab => createVocabCard(vocab)).join('')}
+                </div>
+            `;
+            resultsDiv.innerHTML = html;
+        }
+
+        // Load review words
+        async function loadReviewWords() {
+            const limit = document.getElementById('review-limit').value;
+            const resultsDiv = document.getElementById('review-results');
+            resultsDiv.innerHTML = '<div class="loading">📅 Loading review words...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/vocabulary/review/due`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ limit: parseInt(limit) })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load review words');
+                }
+
+                const data = await response.json();
+                displayReviewWords(data.data);
+            } catch (error) {
+                console.error('Load error:', error);
+                resultsDiv.innerHTML = `<div class="empty-state">❌ Failed to load: ${error.message}</div>`;
+            }
+        }
+
+        // Display review words
+        function displayReviewWords(vocabList) {
+            const resultsDiv = document.getElementById('review-results');
+            
+            if (!vocabList || vocabList.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">✅</div>
+                        <p>Great job! No words due for review right now.</p>
+                        <p>Keep adding vocabulary to build your learning habit!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = `
+                <h3 style="margin-bottom: 20px;">Review these ${vocabList.length} word(s)</h3>
+                <div class="vocab-grid">
+                    ${vocabList.map(vocab => createVocabCard(vocab)).join('')}
+                </div>
+            `;
+            resultsDiv.innerHTML = html;
+        }
+
+        // Mark as reviewed
+        async function markAsReviewed(vocabId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/vocabulary/${vocabId}/review`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to mark as reviewed');
+                }
+
+                alert('✓ Marked as reviewed!');
+                // Reload current view
+                const activeTab = document.querySelector('.vocab-tab.active').getAttribute('onclick').match(/'(\w+)'/)[1];
+                if (activeTab === 'review') {
+                    loadReviewWords();
+                } else {
+                    loadAllVocabulary();
+                }
+            } catch (error) {
+                console.error('Review error:', error);
+                alert('Failed to mark as reviewed');
+            }
+        }
+
+        // Show related words
+        async function showRelatedWords(vocabId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/vocabulary/${vocabId}/related?limit=5`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load related words');
+                }
+
+                const data = await response.json();
+                if (data.related && data.related.length > 0) {
+                    const words = data.related.map(v => v.word).join(', ');
+                    alert(`Related words to "${data.word}":\n\n${words}`);
+                } else {
+                    alert(`No related words found for "${data.word}"`);
+                }
+            } catch (error) {
+                console.error('Related words error:', error);
+                alert('Failed to load related words');
+            }
+        }
+
+        // Delete vocabulary
+        async function deleteVocab(vocabId) {
+            if (!confirm('Are you sure you want to delete this word?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/vocabulary/${vocabId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete');
+                }
+
+                alert('✓ Deleted successfully!');
+                loadAllVocabulary();
+            } catch (error) {
+                console.error('Delete error:', error);
+                alert('Failed to delete vocabulary');
+            }
+        }
+
+        // Add vocabulary
+        async function addVocabulary(event) {
+            event.preventDefault();
+
+            const word = document.getElementById('new-word').value.trim();
+            const pronunciation = document.getElementById('new-pronunciation').value.trim();
+            const definition = document.getElementById('new-definition').value.trim();
+            const sample = document.getElementById('new-sample').value.trim();
+            const language = document.getElementById('new-language').value;
+            const difficulty = document.getElementById('new-difficulty').value;
+            const tagsInput = document.getElementById('new-tags').value.trim();
+            const notes = document.getElementById('new-notes').value.trim();
+
+            const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(t => t) : [];
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/vocabulary/add`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        word: word,
+                        pronunciation: pronunciation || null,
+                        definition: definition,
+                        sample_sentence: sample || null,
+                        related_words: relatedWords,
+                        language: language,
+                        difficulty: difficulty || null,
+                        tags: tags,
+                        notes: notes || null
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to add vocabulary');
+                }
+
+                const data = await response.json();
+                alert(`✓ "${word}" added successfully!`);
+                
+                // Reset form
+                document.getElementById('add-word-form').reset();
+                relatedWords = [];
+                document.getElementById('related-words-display').innerHTML = '';
+
+                // Switch to search tab
+                document.querySelector('.vocab-tab[onclick*="search"]').click();
+            } catch (error) {
+                console.error('Add error:', error);
+                alert('Failed to add vocabulary: ' + error.message);
+            }
+        }
+
+        // Handle related words input
+        document.getElementById('new-related-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const word = this.value.trim();
+                if (word && !relatedWords.includes(word)) {
+                    relatedWords.push(word);
+                    updateRelatedWordsDisplay();
+                    this.value = '';
+                }
+            }
+        });
+
+        function updateRelatedWordsDisplay() {
+            const display = document.getElementById('related-words-display');
+            display.innerHTML = relatedWords.map((word, index) => `
+                <span class="related-word-tag">
+                    ${word}
+                    <span class="remove-tag" onclick="removeRelatedWord(${index})">×</span>
+                </span>
+            `).join('');
+        }
+
+        function removeRelatedWord(index) {
+            relatedWords.splice(index, 1);
+            updateRelatedWordsDisplay();
+        }
+
+        // Load statistics
+        async function loadStats() {
+            const statsDiv = document.getElementById('stats-display');
+            statsDiv.innerHTML = '<div class="loading">📊 Loading statistics...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/vocabulary/stats/summary`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load statistics');
+                }
+
+                const data = await response.json();
+                displayStats(data);
+            } catch (error) {
+                console.error('Stats error:', error);
+                statsDiv.innerHTML = `<div class="empty-state">❌ Failed to load statistics</div>`;
+            }
+        }
+
+        // Display statistics
+        function displayStats(stats) {
+            const statsDiv = document.getElementById('stats-display');
+            
+            const html = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.total_words}</div>
+                        <div class="stat-label">Total Words</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.recent_additions}</div>
+                        <div class="stat-label">Added This Week</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.reviewed_words}</div>
+                        <div class="stat-label">Reviewed Words</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${stats.total_words - stats.reviewed_words}</div>
+                        <div class="stat-label">Need Review</div>
+                    </div>
+                </div>
+
+                ${stats.by_language.length > 0 ? `
+                    <div class="search-section" style="margin-top: 20px;">
+                        <h3>📚 By Language</h3>
+                        <div class="vocab-meta">
+                            ${stats.by_language.map(item => `
+                                <span class="vocab-tag">${item.language}: ${item.count}</span>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
+                ${stats.by_difficulty.length > 0 ? `
+                    <div class="search-section" style="margin-top: 20px;">
+                        <h3>📊 By Difficulty</h3>
+                        <div class="vocab-meta">
+                            ${stats.by_difficulty.map(item => {
+                                const diffClass = `difficulty-${item.difficulty}`;
+                                return `<span class="vocab-tag ${diffClass}">${item.difficulty}: ${item.count}</span>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+            statsDiv.innerHTML = html;
+        }
+
+        // Word distance visualization using D3.js
+        async function visualizeWordDistance() {
+            const centerWord = document.getElementById('center-word').value.trim();
+            if (!centerWord) {
+                alert('Please enter a word to visualize');
+                return;
+            }
+
+            const vizDiv = document.getElementById('word-distance-viz');
+            vizDiv.innerHTML = '<div class="loading">🎯 Analyzing word relationships...</div>';
+
+            try {
+                // Search for the center word and related words
+                const response = await fetch(`${API_BASE_URL}/vocabulary/search`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: centerWord,
+                        use_semantic_search: true,
+                        limit: 20
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to search');
+                }
+
+                const data = await response.json();
+                if (data.results.length === 0) {
+                    vizDiv.innerHTML = '<div class="empty-state">No words found for visualization</div>';
+                    return;
+                }
+
+                drawWordDistanceGraph(data.results, centerWord);
+            } catch (error) {
+                console.error('Visualization error:', error);
+                vizDiv.innerHTML = `<div class="empty-state">❌ Visualization failed: ${error.message}</div>`;
+            }
+        }
+
+        // Draw word distance graph
+        function drawWordDistanceGraph(results, centerWord) {
+            const vizDiv = document.getElementById('word-distance-viz');
+            vizDiv.innerHTML = ''; // Clear
+
+            const width = vizDiv.clientWidth || 800;
+            const height = 600;
+
+            // Create SVG
+            const svg = d3.select('#word-distance-viz')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+
+            // Prepare nodes (convert similarity to distance)
+            const nodes = results.map((result, i) => ({
+                id: result.entry.word,
+                word: result.entry.word,
+                definition: result.entry.definition,
+                similarity: result.relevance_score,
+                distance: 1 - result.relevance_score, // Convert to distance
+                isCenter: i === 0,
+                x: width / 2 + (Math.random() - 0.5) * 400,
+                y: height / 2 + (Math.random() - 0.5) * 400
+            }));
+
+            // Create links between similar words
+            const links = [];
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    if (nodes[i].similarity > 0.5 && nodes[j].similarity > 0.5) {
+                        links.push({
+                            source: nodes[i],
+                            target: nodes[j],
+                            strength: (nodes[i].similarity + nodes[j].similarity) / 2
+                        });
+                    }
+                }
+            }
+
+            // Create force simulation
+            const simulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(links).distance(d => (1 - d.strength) * 200))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(50));
+
+            // Draw links
+            const link = svg.append('g')
+                .selectAll('line')
+                .data(links)
+                .enter()
+                .append('line')
+                .attr('stroke', '#94a3b8')
+                .attr('stroke-width', d => d.strength * 3)
+                .attr('stroke-opacity', 0.3);
+
+            // Draw nodes
+            const node = svg.append('g')
+                .selectAll('g')
+                .data(nodes)
+                .enter()
+                .append('g')
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended));
+
+            // Add circles
+            node.append('circle')
+                .attr('r', d => d.isCenter ? 20 : 10 + d.similarity * 15)
+                .attr('fill', d => {
+                    if (d.isCenter) return '#667eea';
+                    if (d.similarity > 0.8) return '#10b981';
+                    if (d.similarity > 0.6) return '#f59e0b';
+                    return '#94a3b8';
+                })
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 2);
+
+            // Add text labels
+            node.append('text')
+                .text(d => d.word)
+                .attr('font-size', d => d.isCenter ? 16 : 12)
+                .attr('font-weight', d => d.isCenter ? 'bold' : 'normal')
+                .attr('text-anchor', 'middle')
+                .attr('dy', 25)
+                .attr('fill', '#1e293b');
+
+            // Add similarity scores
+            node.append('text')
+                .text(d => !d.isCenter ? `${(d.similarity * 100).toFixed(0)}%` : '')
+                .attr('font-size', 10)
+                .attr('text-anchor', 'middle')
+                .attr('dy', 35)
+                .attr('fill', '#64748b');
+
+            // Add tooltips
+            node.append('title')
+                .text(d => `${d.word}\nSimilarity: ${(d.similarity * 100).toFixed(1)}%\n${d.definition.substring(0, 100)}...`);
+
+            // Update positions on simulation tick
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+
+            // Drag functions
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+        }
+
+        // Load all word relations
+        async function loadAllWordRelations() {
+            const vizDiv = document.getElementById('word-distance-viz');
+            vizDiv.innerHTML = '<div class="loading">📚 Loading all vocabulary for visualization...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/vocabulary/list`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        limit: 30,
+                        offset: 0
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load vocabulary');
+                }
+
+                const data = await response.json();
+                if (data.data.length === 0) {
+                    vizDiv.innerHTML = '<div class="empty-state">No vocabulary to visualize</div>';
+                    return;
+                }
+
+                // Convert to search results format
+                const results = data.data.map((vocab, i) => ({
+                    entry: vocab,
+                    relevance_score: 1.0 - (i * 0.02) // Simulate decreasing similarity
+                }));
+
+                drawWordDistanceGraph(results, data.data[0].word);
+            } catch (error) {
+                console.error('Load error:', error);
+                vizDiv.innerHTML = `<div class="empty-state">❌ Failed to load: ${error.message}</div>`;
+            }
+        }
+
+        // Allow Enter key in search
+        document.getElementById('search-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchVocabulary();
+            }
+        });
+
+        document.getElementById('center-word').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                visualizeWordDistance();
+            }
+        });
+
+        // Load initial data
+        loadAllVocabulary();
+    </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+pydantic==2.7.4
+python-dotenv==1.0.1
+httpx==0.27.0
+
+# Vector DB - updated to compatible version with Qdrant 1.15.x
+qdrant-client==1.11.3
+openai==1.51.0
+numpy==1.24.3
