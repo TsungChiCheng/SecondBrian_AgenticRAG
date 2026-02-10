@@ -324,7 +324,7 @@ async def get_openai_response(query: str) -> str:
                     "Content-Type": "application/json"
                 },
                 json=request_json,
-                timeout=30.0
+                timeout=float(os.getenv("LLM_TIMEOUT", "120"))
             )
             
             if response.status_code == 200:
@@ -357,7 +357,7 @@ async def get_claude_response(query: str) -> str:
                     "temperature": float(os.getenv("CLAUDE_TEMPERATURE", "0")),
                     "messages": [{"role": "user", "content": query}]
                 },
-                timeout=30.0
+                timeout=float(os.getenv("LLM_TIMEOUT", "120"))
             )
             
             if response.status_code == 200:
@@ -392,7 +392,7 @@ async def get_gemini_response(query: str) -> str:
                         "maxOutputTokens": int(os.getenv("GEMINI_MAX_TOKENS", "4000"))
                     }
                 },
-                timeout=30.0
+                timeout=float(os.getenv("LLM_TIMEOUT", "120"))
             )
             
             if response.status_code == 200:
@@ -428,7 +428,7 @@ async def get_grok_response(query: str) -> str:
                     "temperature": float(os.getenv("GROK_TEMPERATURE", "0")),
                     "max_tokens": int(os.getenv("GROK_MAX_TOKENS", "4000"))
                 },
-                timeout=30.0
+                timeout=float(os.getenv("LLM_TIMEOUT", "120"))
             )
             
             if response.status_code == 200:

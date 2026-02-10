@@ -29,7 +29,9 @@ def get_reasoning_llm():
     return ChatOpenAI(
         model="gpt-4o",  # Use GPT-4o for reasoning
         temperature=0.1,  # Low temperature for consistent reasoning
-        api_key=api_key
+        api_key=api_key,
+        timeout=int(os.getenv("LLM_TIMEOUT", "120")),  # Configurable timeout for complex queries
+        max_retries=int(os.getenv("LLM_MAX_RETRIES", "2"))  # Configurable retry count
     )
 
 
