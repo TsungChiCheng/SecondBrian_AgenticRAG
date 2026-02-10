@@ -21,11 +21,19 @@ langchain-openai==1.1.7
 langchain-community==0.4.1
 langchain-text-splitters==1.1.0
 
+# Token counting and markdown parsing for improved chunking
+tiktoken==0.8.0
+markdown-it-py==3.0.0
+
 # Database support
 asyncpg==0.29.0
 
 # Notion SDK
 notion-client==2.2.1
+
+# Testing
+pytest==8.0.0
+pytest-asyncio==0.23.0
 
 # Vector Database (using service instead)
 # chromadb==0.5.17              

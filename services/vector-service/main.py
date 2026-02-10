@@ -21,6 +21,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 print("Vector service module imported; initializing...", flush=True)
 
+# Try to import tiktoken for token counting
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    logger.warning("tiktoken not available - using fallback token estimation")
+    TIKTOKEN_AVAILABLE = False
+
+# Token limits for OpenAI embeddings (text-embedding-3-small supports 8191 tokens)
+MAX_EMBEDDING_TOKENS = 8191
+
 app = FastAPI(title="Vector Service", description="Handles embeddings and vector search")
 
 # Configuration
@@ -55,16 +66,54 @@ class OpenAIEmbeddingsService:
         if not self._client:
             raise RuntimeError("OpenAI API key not configured. Embedding features are disabled.")
         return self._client
+    
+    def _count_tokens(self, text: str) -> int:
+        """Count tokens in text for validation."""
+        if not TIKTOKEN_AVAILABLE:
+            # Fallback: rough estimation (1 token ≈ 4 characters)
+            return len(text) // 4
+        
+        try:
+            encoding = tiktoken.get_encoding("cl100k_base")
+            return len(encoding.encode(text))
+        except Exception:
+            # Fallback to character-based estimation
+            return len(text) // 4
+    
+    def _validate_text_length(self, text: str, operation: str = "embedding") -> None:
+        """Validate text doesn't exceed token limits."""
+        token_count = self._count_tokens(text)
+        if token_count > MAX_EMBEDDING_TOKENS:
+            logger.error(
+                f"Text exceeds embedding token limit: {token_count} > {MAX_EMBEDDING_TOKENS}. "
+                f"Operation: {operation}. Text preview: {text[:200]}..."
+            )
+            raise ValueError(
+                f"Text is too long for {operation} ({token_count} tokens, max {MAX_EMBEDDING_TOKENS}). "
+                f"Please split into smaller chunks."
+            )
+        elif token_count > MAX_EMBEDDING_TOKENS * 0.9:
+            logger.warning(
+                f"Text approaching embedding token limit: {token_count} tokens "
+                f"({token_count / MAX_EMBEDDING_TOKENS * 100:.1f}% of max). "
+                f"Operation: {operation}."
+            )
         
     def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for a single text"""
         try:
+            # Validate text length first
+            self._validate_text_length(text, operation="single embedding")
+            
             client = self._require_client()
             response = client.embeddings.create(
                 model=self.model,
                 input=text
             )
             return response.data[0].embedding
+        except ValueError as e:
+            # Re-raise validation errors
+            raise
         except Exception as e:
             logger.error(f"Error generating embedding: {e}")
             raise
@@ -72,12 +121,19 @@ class OpenAIEmbeddingsService:
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for multiple texts"""
         try:
+            # Validate all texts first
+            for i, text in enumerate(texts):
+                self._validate_text_length(text, operation=f"batch embedding (text {i+1}/{len(texts)})")
+            
             client = self._require_client()
             response = client.embeddings.create(
                 model=self.model,
                 input=texts
             )
             return [data.embedding for data in response.data]
+        except ValueError as e:
+            # Re-raise validation errors
+            raise
         except Exception as e:
             logger.error(f"Error generating embeddings: {e}")
             raise

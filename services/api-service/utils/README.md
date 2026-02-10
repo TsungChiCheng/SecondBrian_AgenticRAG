@@ -4,6 +4,55 @@ This directory contains utility scripts and helpers for the API service.
 
 ## Files
 
+### chunk.py
+**Purpose**: Advanced text chunking with hierarchical markdown splitting
+
+**Features**:
+- Hierarchical markdown-based chunking (H2 → H3 → sentences)
+- Token counting for embedding safety (8191 token limit)
+- Adaptive strategy based on content type
+- Comprehensive logging and metrics
+- Backward compatibility with legacy chunking
+
+**Usage**:
+```python
+from utils.chunk import adaptive_chunk_text
+
+# For LLM answers (uses hierarchical markdown chunking)
+chunks = adaptive_chunk_text(
+    text=answer_text,
+    content_type="answer"
+)
+
+# For documents (uses recursive character splitting)
+chunks = adaptive_chunk_text(
+    text=document_text,
+    content_type="document"
+)
+```
+
+**Key Functions**:
+- `adaptive_chunk_text()`: Main entry point for all chunking
+- `hierarchical_markdown_chunk()`: Markdown-aware semantic splitting
+- `count_tokens()`: Accurate token counting with tiktoken
+- `parse_markdown_headers()`: Extract markdown headers
+- `split_by_header_level()`: Split text by H2/H3 headers
+- `split_by_sentences()`: Fallback sentence-based splitting
+
+**Chunking Strategy**:
+1. **Short content** (< 6000 words): Store as single chunk
+2. **Long markdown content**: Split by H2 headers first
+3. **Oversized sections**: Recursively split by H3 headers
+4. **No headers**: Fallback to sentence-based splitting
+5. **All chunks**: Validated against 8191 token limit
+
+**Implementation Details**:
+- Based on CHUNKING_IMPROVEMENT_PLAN.md Option 2
+- Target chunk size: 400-600 words
+- Max tokens per chunk: 8191 (OpenAI embedding limit)
+- Preserves semantic coherence with header context
+- Logs metrics: chunk count, avg/min/max words, variance
+
 ### embedding_search.py
 **Purpose**: Standalone embedding-based search utility
 

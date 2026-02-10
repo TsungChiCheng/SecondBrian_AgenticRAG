@@ -64,6 +64,131 @@ All LLMs receive the **full retrieved context** injected into their prompts:
 
 ---
 
+## AgenticRAG Mechanism
+
+This project implements a sophisticated **Agentic RAG** (Retrieval-Augmented Generation) system powered by **LangGraph**, featuring intelligent routing, multi-source retrieval, parallel LLM calls, and context-aware synthesis.
+
+### How It Works
+
+The agentic workflow operates as a state machine with the following stages:
+
+#### 1. **Route Query** (`route_query_node`)
+- **Purpose**: Intelligently decides whether the query requires context retrieval
+- **LLM**: GPT-4o at temperature 0.1 (for consistent reasoning)
+- **Logic**: 
+  - Analyzes the user's query to determine if it needs historical context
+  - Automatically forces retrieval for multi-turn conversations to maintain context
+  - Outputs: `should_retrieve` decision flag
+
+#### 2. **Retrieve Context** (`retrieve_context_node`)
+- **Purpose**: Gathers relevant information from three parallel sources
+- **No LLM used** — Pure data retrieval for speed and cost efficiency
+- **Sources**:
+  1. **Semantic Search** (Qdrant) — Vector similarity search on stored knowledge
+  2. **User Memories** (PostgreSQL) — Past Q&A from `prompt_logs` table across all sessions
+  3. **Session History** (PostgreSQL) — Recent messages from the current conversation
+- **Smart Filtering**: 
+  - Removes low-value responses ("I don't have information about...")
+  - Deduplicates context to avoid redundancy
+  - Limits to top results per source
+
+#### 3. **Refine Query** (`refine_query_node`) — Optional
+- **Purpose**: Improves the query if initial retrieval returns insufficient context
+- **Trigger**: Activated when `retrieved_context` is empty but iterations remain
+- **LLM**: GPT-4o refines the query phrasing
+- **Iteration**: Can retry retrieval with refined query (max iterations configurable)
+
+#### 4. **Call LLMs** (`call_llms_node`)
+- **Purpose**: Parallel fan-out to multiple LLM providers with injected context
+- **Models**: OpenAI (gpt-4o), Gemini (gemini-2.0-flash-exp), Grok (grok-2-vision-1212)
+- **Context Injection**: 
+  - Retrieved context formatted into a structured prompt
+  - Session history included for conversational coherence
+  - Each model receives **identical context** for consistent comparison
+- **Execution**: All models called simultaneously via `asyncio.gather()`
+- **Error Handling**: 
+  - Rate limit detection (429 responses)
+  - Automatic fallback for unsupported models
+  - Graceful degradation if providers are unconfigured
+
+#### 5. **Generate Answer** (`generate_answer_node`)
+- **Purpose**: Synthesizes a final answer from all model responses
+- **LLM**: GPT-4o as the synthesis engine
+- **Input**:
+  - Retrieved context (vector search + memories + history)
+  - Individual answers from all LLMs (OpenAI, Gemini, Grok)
+  - Full conversation history
+- **Output**: Coherent, context-aware final answer that:
+  - Draws from retrieved knowledge
+  - Synthesizes perspectives from multiple models
+  - Maintains conversation continuity
+
+### State Management
+
+The workflow uses **LangGraph's StateGraph** with typed state (`ConversationState`):
+
+```python
+{
+  "session_id": str,           # Current conversation session
+  "user_id": str,              # User identifier
+  "current_query": str,        # User's question (can be refined)
+  "messages": List[dict],      # Full conversation history
+  "should_retrieve": bool,     # Routing decision
+  "retrieved_context": List,   # Context from 3 sources
+  "selected_models": List,     # Which LLMs to call
+  "llm_answers": Dict,         # Individual model responses
+  "llm_errors": Dict,          # Error tracking per model
+  "final_answer": str,         # Synthesized response
+  "agent_thoughts": List,      # Debugging/transparency log
+  "iteration_count": int,      # Current iteration
+  "max_iterations": int        # Iteration limit (default: 3)
+}
+```
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Conditional Routing** | Not all queries need retrieval—simple questions go straight to answer generation |
+| **Triple-Source Retrieval** | Combines semantic search, cross-session memories, and session history |
+| **Iterative Refinement** | Automatically refines queries if initial retrieval fails |
+| **Parallel LLM Calls** | Calls OpenAI, Gemini, and Grok simultaneously for diverse perspectives |
+| **Context Injection** | All LLMs receive full retrieved context, ensuring informed responses |
+| **Intelligent Synthesis** | Final answer combines best insights from all sources |
+| **Transparent Logging** | `agent_thoughts` array tracks decision process for debugging |
+
+### Flow Control
+
+The workflow uses **conditional edges** for dynamic routing:
+
+```
+START → route_query
+         ↓
+     [should_retrieve?]
+         ↓
+    Yes: retrieve_context → [has context?]
+                              ↓
+                         No: refine_query → retrieve_context (retry)
+                         Yes: call_llms
+    No: call_llms (direct answer)
+         ↓
+    generate_answer → END
+```
+
+### Why Agentic?
+
+Traditional RAG systems follow a fixed pipeline: retrieve → generate. This **agentic** approach adds:
+
+1. **Intelligence**: Decides when retrieval is necessary
+2. **Adaptability**: Refines queries if initial retrieval fails
+3. **Redundancy**: Calls multiple LLMs for robustness
+4. **Context-Awareness**: Full conversation memory across sessions
+5. **Observability**: Explicit state tracking and decision logging
+
+This architecture ensures that answers are not just generated from context, but intelligently orchestrated through a reasoning process that adapts to each query's needs.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -217,3 +342,8 @@ docker compose logs -f api
 docker compose exec db psql -U alvin -d secondbrain
 ```
 
+---
+
+## License
+
+MIT

@@ -8,3 +8,4 @@ httpx==0.27.0
 qdrant-client==1.11.3
 openai==1.51.0
 numpy==1.24.3
+tiktoken==0.8.0  # Token counting for embedding validation

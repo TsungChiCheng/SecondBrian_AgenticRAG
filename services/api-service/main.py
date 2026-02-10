@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from uuid import UUID
-from utils.chunk import chunk_text
+from utils.chunk import chunk_text, adaptive_chunk_text
 
 # Load environment variables
 load_dotenv()
@@ -97,12 +97,8 @@ from db.sessions import (
     deactivate_session
 )
 from agentic import create_agentic_rag_graph, ConversationState
+from agentic.prompts import IMAGE_ANALYSIS_PROMPT, build_summarization_system_prompt
 from db import get_pool  # For seeding test user when auth bypass is enabled
-
-# Default prompt for image analysis (used by ImageAnalysisRequest)
-IMAGE_ANALYSIS_DEFAULT_PROMPT = (
-    "Describe what's in this image in detail. Extract any text, concepts, or key information that could be searched."
-)
 
 # Pydantic Models
 class QueryRequest(BaseModel):
@@ -136,7 +132,7 @@ class AskResponse(BaseModel):
 class ImageAnalysisRequest(BaseModel):
     image_base64: str
     mime_type: str = "image/jpeg"  # image/jpeg, image/png, image/webp
-    prompt: Optional[str] = IMAGE_ANALYSIS_DEFAULT_PROMPT
+    prompt: Optional[str] = IMAGE_ANALYSIS_PROMPT
     user_query: Optional[str] = None  # Additional text input from user to provide context
     session_id: Optional[str] = None  # Link to conversation if provided
     selected_models: List[str] = ["OpenAI", "Claude", "Gemini", "Grok"]
@@ -529,10 +525,7 @@ async def get_openai_summary(question: str, llm_responses: Dict[str, str]) -> st
         current_date = datetime.now().strftime("%B %d, %Y")
         
         # Create summarization prompt
-        system_prompt = f"""Today's date is {current_date}.
-You are an expert at synthesizing information from multiple AI sources. 
-Create a comprehensive, accurate summary that combines the best insights from all responses.
-Focus on factual information and avoid speculation."""
+        system_prompt = build_summarization_system_prompt(current_date)
         
         user_prompt = f"""Question: {question}
 
@@ -940,7 +933,11 @@ async def ask_question(
     # Store in vector DB only if informative to avoid polluting retrieval
     if is_informative:
         try:
-            chunks = chunk_text(f"Q: {request.user_input}\nA: {summary}")
+            # Use adaptive chunking for LLM answers (hierarchical markdown splitting)
+            chunks = adaptive_chunk_text(
+                text=f"Q: {request.user_input}\nA: {summary}",
+                content_type="answer"  # Enable hierarchical markdown chunking
+            )
             chunk_total = len(chunks)
             concepts = []
             base_id = f"qa_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{user.id[:8]}"
@@ -957,6 +954,7 @@ async def ask_question(
                         "timestamp": datetime.now().isoformat(),
                         "chunk_index": idx,
                         "chunk_total": chunk_total,
+                        "chunking_method": "adaptive_markdown",  # Track method used
                     }
                 })
             
@@ -1266,7 +1264,11 @@ async def analyze_image(
             
             # Store in vector database for semantic search
             async with httpx.AsyncClient() as client:
-                chunks = chunk_text(storage_content)
+                # Use adaptive chunking for image analysis content
+                chunks = adaptive_chunk_text(
+                    text=storage_content,
+                    content_type="answer"  # Image analysis can benefit from markdown structure too
+                )
                 chunk_total = len(chunks)
                 concepts = []
                 for idx, chunk in enumerate(chunks):
@@ -1283,6 +1285,7 @@ async def analyze_image(
                             "timestamp": datetime.now().isoformat(),
                             "is_image": True,
                             "chunk_index": idx,
+                            "chunking_method": "adaptive_markdown",
                             "chunk_total": chunk_total,
                         }
                     })

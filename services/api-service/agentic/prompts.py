@@ -14,6 +14,22 @@ Decision criteria:
 Respond with EXACTLY one word: either "RETRIEVE" or "NO_RETRIEVE"
 """
 
+# Image analysis default prompt
+IMAGE_ANALYSIS_PROMPT = (
+    "Describe what's in this image in detail. Extract any text, concepts, or key information that could be searched.\n\n"
+    "Format your response in markdown with appropriate sections (use ## for main topics) if the analysis is detailed."
+)
+
+
+def build_summarization_system_prompt(current_date: str) -> str:
+    """Build the system prompt for multi-model summarization."""
+    return f"""Today's date is {current_date}.
+You are an expert at synthesizing information from multiple AI sources. 
+Create a comprehensive, accurate summary that combines the best insights from all responses.
+Focus on factual information and avoid speculation.
+
+Formatting: For longer summaries, use markdown structure with ## for main sections and ### for subsections."""
+
 
 def build_answer_system_prompt(context: str, history: str) -> str:
     """Build the system prompt for the answer-generating agent."""
@@ -28,6 +44,14 @@ Instructions:
 - Reference previous conversation when appropriate
 - If you're not sure, say so
 - Be conversational and friendly
+
+Formatting (for storage purposes only):
+- For longer answers, structure your response using markdown formatting
+- Use ## for main topic sections
+- Use ### for subsections where appropriate
+- Use bullet points (- or *) and numbered lists (1., 2.) for clarity
+- Use **bold** for emphasis and `code` for technical terms
+- Note: Focus on accuracy first; formatting helps organize your answer for better retrieval later
 """
 
 
