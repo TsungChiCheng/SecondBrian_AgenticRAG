@@ -11,8 +11,10 @@ app = FastAPI(
     version="1.0"
 )
 
-# Get API URL from environment variable
+# Get API URL and timeout from environment variables
 API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8001')
+# Frontend timeout should be higher than backend to allow backend time to complete
+FRONTEND_TIMEOUT = int(os.getenv('FRONTEND_TIMEOUT', '150')) * 1000  # Convert to milliseconds
 
 # ---------------------------------------------------------------------------
 # CORS
@@ -44,7 +46,8 @@ async def serve_config():
     config_js = f"""
 // Auto-generated configuration
 window.APP_CONFIG = {{
-    apiBaseUrl: '{API_BASE_URL}'
+    apiBaseUrl: '{API_BASE_URL}',
+    timeout: {FRONTEND_TIMEOUT}
 }};
 """
     return HTMLResponse(content=config_js, media_type="application/javascript")

@@ -30,6 +30,8 @@ services:
     environment:
       # API endpoint for frontend to connect to
       API_BASE_URL: ${API_BASE_URL}
+      # Frontend timeout in seconds (should be higher than backend timeout)
+      FRONTEND_TIMEOUT: ${FRONTEND_TIMEOUT:-150}
     ports: ["${FRONTEND_PORT:-8000}:8000"]
     restart: unless-stopped
     networks: [microservices]
@@ -68,6 +70,10 @@ services:
       CLAUDE_TEMPERATURE: ${CLAUDE_TEMPERATURE:-0}
       GEMINI_TEMPERATURE: ${GEMINI_TEMPERATURE:-0}
       GROK_TEMPERATURE: ${GROK_TEMPERATURE:-0}
+      
+      # Timeout Configuration
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-120}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
       
       # Notion Integration
       NOTION_TOKEN: ${NOTION_TOKEN}

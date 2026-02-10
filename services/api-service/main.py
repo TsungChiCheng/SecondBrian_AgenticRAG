@@ -492,7 +492,7 @@ Please provide a comprehensive summary that combines the best insights from all 
                         "maxOutputTokens": int(os.getenv("GEMINI_MAX_TOKENS", "2000"))
                     }
                 },
-                timeout=45.0  # Longer timeout for summarization
+                timeout=float(os.getenv("LLM_TIMEOUT", "120"))
             )
             
             if response.status_code == 200:
@@ -508,6 +508,7 @@ Please provide a comprehensive summary that combines the best insights from all 
 async def get_openai_summary(question: str, llm_responses: Dict[str, str]) -> str:
     """Use OpenAI to create a comprehensive summary from all LLM responses"""
     try:
+        print(f"🔹 Starting OpenAI summary generation for: {question[:80]}...")
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             return f"Summary of responses to: '{question}' (OpenAI API key not configured)"
@@ -557,44 +558,43 @@ Please provide a comprehensive summary that:
             request_json["max_tokens"] = int(os.getenv("OPENAI_MAX_TOKENS", "2000"))
         
         async with httpx.AsyncClient() as client:
+            print(f"🔹 Calling OpenAI API with timeout: {os.getenv('LLM_TIMEOUT', '120')}s")
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}"},
                 json=request_json,
-                timeout=30.0
+                timeout=float(os.getenv("LLM_TIMEOUT", "120"))
             )
+            
+            print(f"🔹 OpenAI response status: {response.status_code}")
             
             if response.status_code == 200:
                 data = response.json()
                 summary = data["choices"][0]["message"]["content"]
+                print(f"✅ OpenAI summary generated successfully (length: {len(summary)} chars)")
                 return summary.strip()
             else:
-                return f"OpenAI summarization error: {response.status_code} - Fallback summary of {len(llm_responses)} AI responses to '{question}'"
+                error_msg = f"OpenAI summarization error: {response.status_code} - Fallback summary of {len(llm_responses)} AI responses to '{question}'"
+                print(f"❌ {error_msg}")
+                return error_msg
                 
     except Exception as e:
-        return f"OpenAI summary error: {str(e)[:100]}... Fallback: Multiple AI models provided responses to '{question}'"
+        error_msg = f"OpenAI summary error: {str(e)[:100]}... Fallback: Multiple AI models provided responses to '{question}'"
+        print(f"❌ Exception in OpenAI summary: {error_msg}")
+        return error_msg
 
 async def get_smart_summary(question: str, llm_responses: Dict[str, str]) -> str:
-    """Smart summarization with Gemini primary and OpenAI fallback on quota errors"""
+    """Smart summarization using OpenAI GPT as primary summarization agent"""
     try:
-        # First, try Gemini Pro
-        summary = await get_gemini_pro_summary(question, llm_responses)
-        
-        # Check if Gemini returned a quota error (429) or quota-related message
-        quota_indicators = ["429", "quota", "exceeded", "rate limit", "too many requests"]
-        if any(indicator in summary.lower() for indicator in quota_indicators) and "gemini" in summary.lower():
-            print(f"Gemini quota/rate limit detected, falling back to OpenAI for summarization")
-            print(f"Gemini error was: {summary[:200]}...")
-            summary = await get_openai_summary(question, llm_responses)
-            # Removed prefix - users don't need to see fallback details
-        
+        # Use OpenAI GPT for summarization (more reliable than Gemini which hits rate limits)
+        summary = await get_openai_summary(question, llm_responses)
         return summary
         
     except Exception as e:
-        print(f"Error in smart summary, falling back to OpenAI: {str(e)}")
-        # If anything goes wrong with Gemini, use OpenAI
-        fallback_summary = await get_openai_summary(question, llm_responses)
-        return fallback_summary  # Removed prefix
+        print(f"Error in OpenAI summary, falling back to Gemini: {str(e)}")
+        # If OpenAI fails, try Gemini as backup
+        fallback_summary = await get_gemini_pro_summary(question, llm_responses)
+        return fallback_summary
 
 @app.get("/health")
 async def health():
@@ -847,7 +847,7 @@ async def ask_question(
                 vector_response = await client.post(
                     f"{VECTOR_SERVICE_URL}/concepts/search",
                     json={"query": request.user_input, "limit": 3},
-                    timeout=30.0
+                    timeout=float(os.getenv("LLM_TIMEOUT", "120"))
                 )
                 logger.debug(f"Vector service response status: {vector_response.status_code}")
                 if vector_response.status_code == 200:

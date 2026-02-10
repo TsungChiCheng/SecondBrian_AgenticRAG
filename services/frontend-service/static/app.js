@@ -435,7 +435,9 @@ class SecondBrainApp {
 
     async postJSON(endpoint, payload = {}) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for long multi-LLM calls
+        // Use configured timeout or default to 150s (150000ms)
+        const timeout = window.APP_CONFIG?.timeout || 150000;
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
 
         // Get authentication token
         const authHeaders = this.getAuthHeaders();
@@ -476,6 +478,7 @@ class SecondBrainApp {
             return await response.json();
         } catch (error) {
             clearTimeout(timeoutId);
+            console.error('❌ postJSON error:', error);  // Debug logging
             if (error.name === 'AbortError') {
                 throw new Error('Request timed out. Please try again.');
             }
@@ -543,6 +546,7 @@ class SecondBrainApp {
             this.promptInput.value = '';
             
         } catch (error) {
+            console.error('❌ handleSendMessage error:', error);  // Debug logging
             this.displayError(error.message);
             this.showStatus(window.languageManager.t('status.error'), 'error');
         } finally {
@@ -1592,8 +1596,8 @@ class SecondBrainApp {
             
             this.showStatus(window.languageManager.t('status.analysisComplete'), 'success');
             
-            // Keep image for potential re-analysis - user can manually clear if needed
-            // this.handleClearImage();
+            // Clear the uploaded image after successful analysis
+            this.handleClearImage();
             this.promptInput.value = '';
             
         } catch (error) {
