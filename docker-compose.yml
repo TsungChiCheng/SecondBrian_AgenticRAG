@@ -32,6 +32,7 @@ services:
       API_BASE_URL: ${API_BASE_URL}
       # Frontend timeout in seconds (should be higher than backend timeout)
       FRONTEND_TIMEOUT: ${FRONTEND_TIMEOUT:-150}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports: ["${FRONTEND_PORT:-8000}:8000"]
     restart: unless-stopped
     networks: [microservices]
@@ -83,6 +84,7 @@ services:
       # Server Configuration
       API_HOST: 0.0.0.0
       API_PORT: 8001
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     
     depends_on:
       db:
@@ -108,6 +110,8 @@ services:
     ports: ["${QDRANT_HTTP_PORT:-6333}:6333", "${QDRANT_GRPC_PORT:-6334}:6334"]
     volumes:
       - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__LOGGER__LEVEL: ${QDRANT_LOG_LEVEL:-error}
     networks: [microservices]
 
   # Vector Database Service (Port 8002)
@@ -123,6 +127,7 @@ services:
       # Qdrant Configuration
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     
     depends_on:
       - qdrant

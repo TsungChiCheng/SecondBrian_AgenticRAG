@@ -29,9 +29,11 @@ class ExcludeHealthCheckFilter(logging.Filter):
         # Exclude GET /health requests from access logs
         return 'GET /health' not in record.getMessage()
 
-# Configure root logger with DEBUG level
+# Configure root logger
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout)
@@ -41,13 +43,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configure uvicorn's loggers
-logging.getLogger("uvicorn").setLevel(logging.INFO)
+logging.getLogger("uvicorn").setLevel(log_level)
 uvicorn_access_logger = logging.getLogger("uvicorn.access")
-uvicorn_access_logger.setLevel(logging.INFO)
+uvicorn_access_logger.setLevel(log_level)
 uvicorn_access_logger.addFilter(ExcludeHealthCheckFilter())  # Filter out health checks
 
-# Set httpx to WARNING to reduce noise from HTTP requests
-logging.getLogger("httpx").setLevel(logging.WARNING)
+# If log_level is DEBUG, we might want httpx to be at least INFO to avoid too much noise,
+# but if the user wants "all containers log_level in debug", maybe they want everything.
+# I'll set httpx to one level higher than log_level unless log_level is DEBUG.
+if log_level == "DEBUG":
+    logging.getLogger("httpx").setLevel(logging.INFO)
+else:
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Direct HTTP-based LLM calls to avoid version conflicts
 import json

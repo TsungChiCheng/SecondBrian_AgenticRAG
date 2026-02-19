@@ -13,7 +13,7 @@ import logging
 import httpx
 
 from .state import ConversationState
-from .prompts import ROUTER_PROMPT, build_answer_system_prompt, build_refine_prompt
+from .prompts import ROUTER_PROMPT, SESSION_CLASSIFICATION_PROMPT, build_answer_system_prompt, build_refine_prompt
 from .tools import RAG_TOOLS, semantic_search_tool, session_history_tool, user_memories_tool
 
 logger = logging.getLogger(__name__)
@@ -56,6 +56,47 @@ def should_continue(state: ConversationState) -> str:
     # Otherwise, generate the answer
     logger.info("Agent ready to generate answer")
     return "generate_answer"
+
+
+
+
+
+async def classify_session_node(state: ConversationState) -> ConversationState:
+    """Classify the session intent: History Search (RAG) vs New Knowledge (NO_RAG)"""
+    
+    # If session mode is already set, respect it
+    if state.get("session_mode"):
+        return state
+        
+    # If conversation is already in progress (mid-session), default to RAG/standard routing
+    # to ensure context is maintained.
+    if len(state.get("messages", [])) > 1:
+        state["session_mode"] = "RAG"
+        logger.info("Session in progress, defaulting to RAG mode")
+        return state
+        
+    # Analyze the FIRST query to determine session intent
+    llm = get_reasoning_llm()
+    prompt = SESSION_CLASSIFICATION_PROMPT
+    
+    messages = [
+        SystemMessage(content=prompt),
+        HumanMessage(content=f"Query: {state['current_query']}")
+    ]
+    
+    response = await llm.ainvoke(messages)
+    classification = response.content.strip().upper()
+    
+    # Normalize output
+    if "NO_RAG" in classification:
+        state["session_mode"] = "NO_RAG"
+    else:
+        state["session_mode"] = "RAG"
+        
+    state["agent_thoughts"].append(f"Session classification: {state['session_mode']}")
+    logger.debug(f"🔍 Session Classification Result: {state['session_mode']} (Query: '{state['current_query']}')")
+    
+    return state
 
 
 async def route_query_node(state: ConversationState) -> ConversationState:
@@ -432,6 +473,7 @@ def create_agentic_rag_graph():
     workflow = StateGraph(ConversationState)
     
     # Add nodes
+    workflow.add_node("classify_session", classify_session_node)
     workflow.add_node("route_query", route_query_node)
     workflow.add_node("retrieve_context", retrieve_context_node)
     workflow.add_node("refine_query", refine_query_node)
@@ -439,7 +481,22 @@ def create_agentic_rag_graph():
     workflow.add_node("generate_answer", generate_answer_node)
     
     # Set entry point
-    workflow.set_entry_point("route_query")
+    workflow.set_entry_point("classify_session")
+    
+    # Define routing logic after classification
+    def _route_session(state: ConversationState):
+        if state.get("session_mode") == "NO_RAG":
+            return "call_llms" # Skip retrieval entirely
+        return "route_query"   # Standard RAG flow
+
+    workflow.add_conditional_edges(
+        "classify_session",
+        _route_session,
+        {
+            "call_llms": "call_llms",
+            "route_query": "route_query"
+        }
+    )
     
     # Add conditional edges from route_query
     workflow.add_conditional_edges(

@@ -14,6 +14,28 @@ Decision criteria:
 Respond with EXACTLY one word: either "RETRIEVE" or "NO_RETRIEVE"
 """
 
+# Session classification prompt (decides if session is History Search or New Knowledge)
+SESSION_CLASSIFICATION_PROMPT = """You are a session classifier for an AI assistant. Your job is to classify the INTENT of a new conversation session based on the first user query.
+
+Categories:
+1. "RAG" (History Search / Context Dependent)
+   - User asks about previous conversations ("What did we talk about yesterday?")
+   - User asks about stored knowledge/memory ("Do you remember my preferences?")
+   - User asks about specific facts likely in the database ("What is the project status?")
+   - User refers to "this", "that", "it" implying context.
+
+2. "NO_RAG" (New Knowledge / General Assistance)
+   - User asks for creative writing ("Write a story about a cat")
+   - User asks general knowledge questions ("How to cook rice?")
+   - User asks for coding help without context ("Write a python script to sort a list")
+   - User asks for brainstorming or ideas.
+
+Instruction:
+- Analyze the user's query.
+- Classify into one of the two categories.
+- Respond with EXACTLY one word: either "RAG" or "NO_RAG".
+"""
+
 # Image analysis default prompt
 IMAGE_ANALYSIS_PROMPT = (
     "Describe what's in this image in detail. Extract any text, concepts, or key information that could be searched.\n\n"

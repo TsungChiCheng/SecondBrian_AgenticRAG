@@ -3,6 +3,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# Set debug logging for all services
+export LOG_LEVEL=DEBUG
+export QDRANT_LOG_LEVEL=debug
+
 echo "Stopping stack..."
 docker compose down
 

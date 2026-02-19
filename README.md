@@ -35,10 +35,11 @@ A modernized Second Brain system that keeps conversational memory, routes querie
 
 The agentic RAG pipeline follows these stages:
 
-1. **Route** (`route_query`) — LLM decides whether retrieval is needed
-2. **Retrieve** (`retrieve_context`) — Gathers context from 3 sources (no LLM)
-3. **Call LLMs** (`call_llms`) — Parallel calls to OpenAI/Gemini/Grok with injected context
-4. **Answer** (`generate_answer`) — Synthesizes final response from all LLM outputs
+1. **Classify Session** (`classify_session`) — **[NEW]** LLM categorizes the session as "RAG" (History Search) or "NO_RAG" (General).
+2. **Route** (`route_query`) — LLM decides whether retrieval is needed (only for RAG mode).
+3. **Retrieve** (`retrieve_context`) — Gathers context from 3 sources (no LLM).
+4. **Call LLMs** (`call_llms`) — Parallel calls to OpenAI/Gemini/Grok with injected context (skipped if NO_RAG).
+5. **Answer** (`generate_answer`) — Synthesizes final response from all LLM outputs.
 
 ---
 
@@ -72,7 +73,15 @@ This project implements a sophisticated **Agentic RAG** (Retrieval-Augmented Gen
 
 The agentic workflow operates as a state machine with the following stages:
 
-#### 1. **Route Query** (`route_query_node`)
+#### 1. **Classify Session** (`classify_session_node`)
+- **Purpose**: Determines the intent of a new session based on the first query.
+- **LLM**: GPT-4o
+- **Modes**:
+  - `RAG`: History Search / Context Dependent (triggers full pipeline)
+  - `NO_RAG`: New Knowledge / General Assistance (bypasses retrieval for speed)
+- **Persistence**: Remembers classification for the duration of the session.
+
+#### 2. **Route Query** (`route_query_node`)
 - **Purpose**: Intelligently decides whether the query requires context retrieval
 - **LLM**: GPT-4o at temperature 0.1 (for consistent reasoning)
 - **Logic**: 
@@ -80,7 +89,7 @@ The agentic workflow operates as a state machine with the following stages:
   - Automatically forces retrieval for multi-turn conversations to maintain context
   - Outputs: `should_retrieve` decision flag
 
-#### 2. **Retrieve Context** (`retrieve_context_node`)
+#### 3. **Retrieve Context** (`retrieve_context_node`)
 - **Purpose**: Gathers relevant information from three parallel sources
 - **No LLM used** — Pure data retrieval for speed and cost efficiency
 - **Sources**:
@@ -92,13 +101,13 @@ The agentic workflow operates as a state machine with the following stages:
   - Deduplicates context to avoid redundancy
   - Limits to top results per source
 
-#### 3. **Refine Query** (`refine_query_node`) — Optional
+#### 4. **Refine Query** (`refine_query_node`) — Optional
 - **Purpose**: Improves the query if initial retrieval returns insufficient context
 - **Trigger**: Activated when `retrieved_context` is empty but iterations remain
 - **LLM**: GPT-4o refines the query phrasing
 - **Iteration**: Can retry retrieval with refined query (max iterations configurable)
 
-#### 4. **Call LLMs** (`call_llms_node`)
+#### 5. **Call LLMs** (`call_llms_node`)
 - **Purpose**: Parallel fan-out to multiple LLM providers with injected context
 - **Models**: OpenAI (gpt-4o), Gemini (gemini-2.0-flash-exp), Grok (grok-2-vision-1212)
 - **Context Injection**: 
@@ -106,22 +115,15 @@ The agentic workflow operates as a state machine with the following stages:
   - Session history included for conversational coherence
   - Each model receives **identical context** for consistent comparison
 - **Execution**: All models called simultaneously via `asyncio.gather()`
-- **Error Handling**: 
-  - Rate limit detection (429 responses)
-  - Automatic fallback for unsupported models
-  - Graceful degradation if providers are unconfigured
 
-#### 5. **Generate Answer** (`generate_answer_node`)
+#### 6. **Generate Answer** (`generate_answer_node`)
 - **Purpose**: Synthesizes a final answer from all model responses
 - **LLM**: GPT-4o as the synthesis engine
 - **Input**:
   - Retrieved context (vector search + memories + history)
   - Individual answers from all LLMs (OpenAI, Gemini, Grok)
   - Full conversation history
-- **Output**: Coherent, context-aware final answer that:
-  - Draws from retrieved knowledge
-  - Synthesizes perspectives from multiple models
-  - Maintains conversation continuity
+- **Output**: Coherent, context-aware final answer.
 
 ### State Management
 
@@ -131,6 +133,7 @@ The workflow uses **LangGraph's StateGraph** with typed state (`ConversationStat
 {
   "session_id": str,           # Current conversation session
   "user_id": str,              # User identifier
+  "session_mode": str,         # "RAG" or "NO_RAG" classification
   "current_query": str,        # User's question (can be refined)
   "messages": List[dict],      # Full conversation history
   "should_retrieve": bool,     # Routing decision
@@ -149,12 +152,10 @@ The workflow uses **LangGraph's StateGraph** with typed state (`ConversationStat
 
 | Feature | Description |
 |---------|-------------|
+| **Session Classification** | Distinguishes between historical search vs general requests on first query |
 | **Conditional Routing** | Not all queries need retrieval—simple questions go straight to answer generation |
 | **Triple-Source Retrieval** | Combines semantic search, cross-session memories, and session history |
-| **Iterative Refinement** | Automatically refines queries if initial retrieval fails |
 | **Parallel LLM Calls** | Calls OpenAI, Gemini, and Grok simultaneously for diverse perspectives |
-| **Context Injection** | All LLMs receive full retrieved context, ensuring informed responses |
-| **Intelligent Synthesis** | Final answer combines best insights from all sources |
 | **Transparent Logging** | `agent_thoughts` array tracks decision process for debugging |
 
 ### Flow Control
@@ -205,33 +206,19 @@ This architecture ensures that answers are not just generated from context, but 
    cd SecondBrian_AgenticRAG
    ```
 
-2. Create `.env` file with your credentials:
-   ```bash
-   # Required
-   OPENAI_API_KEY=your-openai-key
-   
-   # Optional LLMs
-   GEMINI_API_KEY=your-gemini-key
-   GROK_API_KEY=your-grok-key
-   
-   # Optional Notion
-   NOTION_TOKEN=your-notion-token
-   NOTION_DB_ID=your-notion-database-id
-   
-   # Database (defaults provided)
-   POSTGRES_USER=alvin
-   POSTGRES_PASSWORD=securepass123
-   POSTGRES_DB=secondbrain
-   ```
+2. Create `.env` file with your credentials (see `.env.example`).
 
 3. Start all services:
    ```bash
-   docker compose up -d --build
+   docker compose up -d
    ```
 
 4. Access the UI at [http://localhost:8000](http://localhost:8000)
 
-### Reset & Clean Start
+### Reset & Debug Mode
+
+Use the provided reset script to perform a clean deployment.
+**Note**: This script automatically enables `DEBUG` logging for all containers.
 
 ```bash
 ./reset_and_run.sh
@@ -266,6 +253,7 @@ This architecture ensures that answers are not just generated from context, but 
 | `POST` | `/summarize` | Generate smart summary |
 | `POST` | `/notion/push` | Push to Notion database |
 | `POST` | `/combo` | Summarize + Notion push |
+| `POST` | `/analyze-image` | Multi-model vision analysis |
 
 ---
 
@@ -285,14 +273,9 @@ This architecture ensures that answers are not just generated from context, but 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENAI_API_KEY` | — | OpenAI API key (required) |
-| `GEMINI_API_KEY` | — | Google Gemini API key |
-| `GROK_API_KEY` | — | xAI Grok API key |
+| `LOG_LEVEL` | `INFO` | Global log level (`DEBUG`, `INFO`, etc.) |
 | `OPENAI_MODEL` | `gpt-4o` | OpenAI model for reasoning |
-| `GEMINI_MODEL` | `gemini-2.0-flash-exp` | Gemini model |
-| `GROK_MODEL` | `grok-beta` | Grok model |
-| `NOTION_TOKEN` | — | Notion integration token |
-| `NOTION_DB_ID` | — | Target Notion database ID |
-| `AGENTIC_SIM_THRESHOLD` | `0.6` | Minimum similarity score for vector search |
+| `AGENTIC_MAX_ITERATIONS` | `2` | Max RAG retrieval retry limit |
 
 ---
 
@@ -301,21 +284,21 @@ This architecture ensures that answers are not just generated from context, but 
 ```
 SecondBrian_AgenticRAG/
 ├── docker-compose.yml           # Service orchestration
-├── reset_and_run.sh             # Clean start script
+├── reset_and_run.sh             # Clean start + Debug mode
 ├── docs/
 │   ├── architecture.svg         # System architecture diagram
-│   ├── workflow.svg             # Agentic RAG workflow
-│   ├── agent-flow.svg           # Detailed agent flow
+│   ├── workflow.svg             # RAG workflow (incl. Classification)
+│   ├── agent-flow.svg           # Detailed agent flow (incl. Classifier)
 │   └── agentic-graph.svg        # LangGraph state diagram
 └── services/
     ├── init.sql                 # Database schema
     ├── api-service/             # FastAPI + LangGraph
     │   ├── main.py              # API endpoints
     │   ├── agentic/
-    │   │   ├── graph.py         # LangGraph workflow
+    │   │   ├── graph.py         # Workflow & Routing logic
     │   │   ├── state.py         # Conversation state
     │   │   ├── tools.py         # RAG tools
-    │   │   └── prompts.py       # System prompts
+    │   │   └── prompts.py       # Session Classification prompts
     │   ├── db/                  # Database operations
     │   ├── tools/               # Summarizer, Notion push
     │   └── auth/                # Authentication middleware
@@ -325,22 +308,11 @@ SecondBrian_AgenticRAG/
 
 ---
 
-## Development
+## Roadmap & TODO
 
-### Rebuild a single service
-```bash
-docker compose up -d --build api
-```
-
-### View logs
-```bash
-docker compose logs -f api
-```
-
-### Access PostgreSQL
-```bash
-docker compose exec db psql -U alvin -d secondbrain
-```
+### Core Improvements
+- [ ] **Image Session Integration**: Apply the session classifier logic to `/analyze-image` queries to maintain context consistency when sessions start with an image.
+- [ ] **Advanced Graph Traversal**: Enhance `knowledge_graph_tool` to explore deeper relationships in vector space.
 
 ---
 
