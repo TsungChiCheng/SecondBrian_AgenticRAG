@@ -167,6 +167,7 @@ class SecondBrainApp {
         // this.claudeCheck = document.getElementById('claude-check'); // Claude hidden from UI
         this.geminiCheck = document.getElementById('gemini-check');
         this.grokCheck = document.getElementById('grok-check');
+        this.modelModeRadios = document.querySelectorAll('input[name="model-mode"]');
 
         // Search elements
         this.searchQuery = document.getElementById('search-query');
@@ -210,12 +211,23 @@ class SecondBrainApp {
         
         // Theme selector elements
         this.themeButtons = document.querySelectorAll('.theme-btn-inline');
+
+        // Initialize response mode (default fast)
+        this.initializeModelMode();
     }
 
     bindEvents() {
         // Chat events
         this.sendBtn.addEventListener('click', () => this.handleSendMessage());
         this.newSessionBtn?.addEventListener('click', () => this.handleNewSession());
+        this.modelModeRadios?.forEach((radio) => {
+            radio.addEventListener('change', () => {
+                if (!radio.checked) return;
+                const mode = radio.value === 'quality' ? 'quality' : 'fast';
+                localStorage.setItem('sbModelMode', mode);
+                this.applyModelMode(mode);
+            });
+        });
         this.promptInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
@@ -486,7 +498,47 @@ class SecondBrainApp {
         }
     }
 
+    initializeModelMode() {
+        if (!this.modelModeRadios || this.modelModeRadios.length === 0) return;
+
+        const savedMode = localStorage.getItem('sbModelMode');
+        const mode = savedMode === 'quality' ? 'quality' : 'fast';
+        this.modelModeRadios.forEach((radio) => {
+            radio.checked = (radio.value === mode);
+        });
+        this.applyModelMode(mode);
+    }
+
+    getCurrentModelMode() {
+        if (!this.modelModeRadios || this.modelModeRadios.length === 0) return null;
+        const selected = Array.from(this.modelModeRadios).find((radio) => radio.checked);
+        return selected?.value === 'quality' ? 'quality' : 'fast';
+    }
+
+    applyModelMode(mode) {
+        if (!this.openaiCheck || !this.geminiCheck || !this.grokCheck) return;
+
+        if (mode === 'quality') {
+            this.openaiCheck.checked = true;
+            this.geminiCheck.checked = true;
+            this.grokCheck.checked = true;
+            return;
+        }
+
+        // Fast mode: keep strong speed/quality balance without Gemini latency.
+        this.openaiCheck.checked = true;
+        this.geminiCheck.checked = false;
+        this.grokCheck.checked = true;
+    }
+
     getSelectedModels() {
+        const mode = this.getCurrentModelMode();
+        if (mode) {
+            this.applyModelMode(mode);
+            if (mode === 'quality') return ['OpenAI', 'Gemini', 'Grok'];
+            return ['OpenAI', 'Grok'];
+        }
+
         const selected = [];
         if (this.openaiCheck.checked) selected.push('OpenAI');
         // if (this.claudeCheck.checked) selected.push('Claude'); // Claude hidden from UI

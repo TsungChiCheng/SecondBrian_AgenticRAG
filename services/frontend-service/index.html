@@ -101,6 +101,21 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Response mode selector -->
+                            <div class="llm-selection llm-mode-selection">
+                                <label class="selection-label" data-i18n="ask.responseMode">Response Mode</label>
+                                <div class="mode-radio-group">
+                                    <label class="mode-radio-label">
+                                        <input type="radio" name="model-mode" value="fast" class="mode-radio" checked>
+                                        <span data-i18n="mode.fast">Fast (OpenAI + Grok)</span>
+                                    </label>
+                                    <label class="mode-radio-label">
+                                        <input type="radio" name="model-mode" value="quality" class="mode-radio">
+                                        <span data-i18n="mode.quality">Quality (OpenAI + Grok + Gemini)</span>
+                                    </label>
+                                </div>
+                            </div>
                             
                             <!-- LLM Selection Checkboxes (hidden: Agentic decides models) -->
                             <div class="llm-selection" style="display: none;">
@@ -119,7 +134,7 @@
                                     </label>
                                     
                                     <label class="checkbox-item">
-                                        <input type="checkbox" id="gemini-check" checked>
+                                        <input type="checkbox" id="gemini-check">
                                         <span class="checkmark gemini"></span>
                                         <span class="model-name" data-i18n="model.gemini">Gemini</span>
                                     </label>

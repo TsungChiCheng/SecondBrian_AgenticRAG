@@ -816,7 +816,8 @@ async def ask_question(
                 "should_retrieve": True,
                 "should_refine": False,
                 "final_answer": None,
-                "selected_models": request.selected_models
+                "selected_models": request.selected_models,
+                "flow_timing": {}
             }
             
             # Execute the graph
@@ -829,11 +830,22 @@ async def ask_question(
             agent_thoughts = result.get("agent_thoughts", [])
             answers = result.get("llm_answers", {})
             errors = result.get("llm_errors", {})
+            flow_timing = result.get("flow_timing", {})
             # surface errors in answers so UI shows availability without polluting synthesis
             for name, err in errors.items():
                 answers[name] = f"{name} unavailable: {err}"
             
             logger.info(f"Agent completed with {len(agent_thoughts)} reasoning steps and {len(answers)} model outputs")
+            if flow_timing:
+                bottleneck = flow_timing.get("bottleneck", {})
+                logger.info(
+                    "AgentFlow trace_started_at=%s trace_finished_at=%s elapsed_ms=%s bottleneck_step=%s bottleneck_ms=%s",
+                    flow_timing.get("trace_started_at"),
+                    flow_timing.get("trace_finished_at", flow_timing.get("trace_last_updated_at")),
+                    flow_timing.get("elapsed_ms"),
+                    bottleneck.get("step"),
+                    bottleneck.get("duration_ms"),
+                )
             
             # Use retrieved context as related knowledge
             related_knowledge = retrieved_context[:5]  # Limit to 5 items

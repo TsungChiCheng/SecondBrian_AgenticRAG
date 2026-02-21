@@ -3,8 +3,10 @@ LangGraph workflow for Agentic RAG
 """
 import os
 import asyncio
+import time
 from typing import Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
+from functools import wraps
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langchain_openai import ChatOpenAI
@@ -17,6 +19,91 @@ from .prompts import ROUTER_PROMPT, SESSION_CLASSIFICATION_PROMPT, build_answer_
 from .tools import RAG_TOOLS, semantic_search_tool, session_history_tool, user_memories_tool
 
 logger = logging.getLogger(__name__)
+
+
+def _utc_now_iso() -> str:
+    """Return current UTC timestamp as ISO-8601 (millisecond precision)."""
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _ensure_flow_timing(state: ConversationState) -> Dict[str, Any]:
+    """Initialize flow timing structure used for bottleneck analysis."""
+    flow_timing = state.setdefault("flow_timing", {})
+    if "trace_started_at" not in flow_timing:
+        flow_timing["trace_started_at"] = _utc_now_iso()
+        flow_timing["_trace_started_perf"] = time.perf_counter()
+    flow_timing.setdefault("steps", {})
+    flow_timing.setdefault("model_calls", {})
+    return flow_timing
+
+
+def _update_bottleneck(flow_timing: Dict[str, Any]) -> None:
+    """Compute the slowest step from completed runs."""
+    slowest_step = None
+    slowest_duration = -1.0
+    for step_name, runs in flow_timing.get("steps", {}).items():
+        for run in runs:
+            duration = run.get("duration_ms")
+            if isinstance(duration, (int, float)) and duration > slowest_duration:
+                slowest_step = step_name
+                slowest_duration = float(duration)
+
+    if slowest_step is not None:
+        flow_timing["bottleneck"] = {
+            "step": slowest_step,
+            "duration_ms": round(slowest_duration, 2),
+            "computed_at": _utc_now_iso(),
+        }
+
+
+def _mark_step_start(state: ConversationState, step_name: str) -> float:
+    """Mark step start time and return monotonic timer."""
+    flow_timing = _ensure_flow_timing(state)
+    started_at = _utc_now_iso()
+    flow_timing["steps"].setdefault(step_name, []).append({"started_at": started_at})
+    logger.info("AgentFlow step_start step=%s started_at=%s", step_name, started_at)
+    return time.perf_counter()
+
+
+def _mark_step_end(state: ConversationState, step_name: str, started_perf: float) -> None:
+    """Mark step end time, compute duration, and refresh bottleneck."""
+    flow_timing = _ensure_flow_timing(state)
+    ended_at = _utc_now_iso()
+    duration_ms = round((time.perf_counter() - started_perf) * 1000, 2)
+    step_runs = flow_timing["steps"].setdefault(step_name, [])
+    if step_runs:
+        step_runs[-1]["ended_at"] = ended_at
+        step_runs[-1]["duration_ms"] = duration_ms
+
+    trace_started_perf = flow_timing.get("_trace_started_perf")
+    if isinstance(trace_started_perf, (int, float)):
+        flow_timing["elapsed_ms"] = round((time.perf_counter() - trace_started_perf) * 1000, 2)
+    flow_timing["trace_last_updated_at"] = ended_at
+
+    _update_bottleneck(flow_timing)
+    bottleneck = flow_timing.get("bottleneck", {})
+    logger.info(
+        "AgentFlow step_end step=%s ended_at=%s duration_ms=%.2f bottleneck=%s(%.2fms)",
+        step_name,
+        ended_at,
+        duration_ms,
+        bottleneck.get("step", "n/a"),
+        float(bottleneck.get("duration_ms", 0.0)),
+    )
+
+
+def timed_node(step_name: str):
+    """Decorator for timing each LangGraph node."""
+    def _decorate(func):
+        @wraps(func)
+        async def _wrapper(state: ConversationState) -> ConversationState:
+            started_perf = _mark_step_start(state, step_name)
+            try:
+                return await func(state)
+            finally:
+                _mark_step_end(state, step_name, started_perf)
+        return _wrapper
+    return _decorate
 
 
 # Initialize the reasoning LLM
@@ -61,6 +148,7 @@ def should_continue(state: ConversationState) -> str:
 
 
 
+@timed_node("classify_session")
 async def classify_session_node(state: ConversationState) -> ConversationState:
     """Classify the session intent: History Search (RAG) vs New Knowledge (NO_RAG)"""
     
@@ -99,6 +187,7 @@ async def classify_session_node(state: ConversationState) -> ConversationState:
     return state
 
 
+@timed_node("route_query")
 async def route_query_node(state: ConversationState) -> ConversationState:
     """Initial routing: decide if we need to retrieve context"""
     
@@ -131,6 +220,7 @@ async def route_query_node(state: ConversationState) -> ConversationState:
     return state
 
 
+@timed_node("refine_query")
 async def refine_query_node(state: ConversationState) -> ConversationState:
     """Refine the user's query when retrieval returned little/no context."""
     llm = get_reasoning_llm()
@@ -150,6 +240,7 @@ async def refine_query_node(state: ConversationState) -> ConversationState:
     return state
 
 
+@timed_node("retrieve_context")
 async def retrieve_context_node(state: ConversationState) -> ConversationState:
     """Retrieve relevant context using RAG tools"""
     
@@ -385,6 +476,33 @@ async def _call_grok(query: str):
         return f"Grok error: {e}"
 
 
+async def _timed_model_call(model_name: str, prompt: str, fn, state: ConversationState):
+    """Call one model and log timestamp/duration for bottleneck checks."""
+    started_at = _utc_now_iso()
+    started_perf = time.perf_counter()
+    try:
+        return await fn(prompt)
+    finally:
+        duration_ms = round((time.perf_counter() - started_perf) * 1000, 2)
+        ended_at = _utc_now_iso()
+        flow_timing = _ensure_flow_timing(state)
+        flow_timing["model_calls"].setdefault(model_name, []).append(
+            {
+                "started_at": started_at,
+                "ended_at": ended_at,
+                "duration_ms": duration_ms,
+            }
+        )
+        logger.info(
+            "AgentFlow model_call model=%s started_at=%s ended_at=%s duration_ms=%.2f",
+            model_name,
+            started_at,
+            ended_at,
+            duration_ms,
+        )
+
+
+@timed_node("call_llms")
 async def call_llms_node(state: ConversationState) -> ConversationState:
     """Fan out to selected LLMs and store their individual answers."""
     prompt = _build_conversation_prompt(state)
@@ -398,7 +516,7 @@ async def call_llms_node(state: ConversationState) -> ConversationState:
     for name in state.get("selected_models", []):
         fn = model_map.get(name)
         if fn:
-            tasks.append(fn(prompt))
+            tasks.append(_timed_model_call(name, prompt, fn, state))
             names.append(name)
     results = await asyncio.gather(*tasks, return_exceptions=True)
     answers: Dict[str, str] = {}
@@ -418,6 +536,7 @@ async def call_llms_node(state: ConversationState) -> ConversationState:
     return state
 
 
+@timed_node("generate_answer")
 async def generate_answer_node(state: ConversationState) -> ConversationState:
     """Generate the final answer using retrieved context"""
     
@@ -462,6 +581,7 @@ async def generate_answer_node(state: ConversationState) -> ConversationState:
     state["agent_thoughts"].append("Generated final answer")
     
     logger.info(f"Generated answer for query: {state['current_query'][:50]}...")
+    _ensure_flow_timing(state)["trace_finished_at"] = _utc_now_iso()
     
     return state
 

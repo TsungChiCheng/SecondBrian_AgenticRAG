@@ -24,6 +24,7 @@ const translations = {
         "ask.placeholder": "Ask anything... I'll consult multiple AI models and give you a comprehensive answer.\n\nOr upload an image below to analyze it!\n\nTip: Press Ctrl+Enter to send quickly!",
         "ask.uploadImage": "Upload Image (Optional)",
         "ask.dragDrop": "or drag & drop here",
+        "ask.responseMode": "Response Mode",
         "ask.selectModels": "Select AI Models to Use:",
         "ask.send": "🚀 Send",
         "ask.summaryTitle": "Summary & Consensus",
@@ -86,6 +87,8 @@ const translations = {
         "model.claude": "Claude",
         "model.gemini": "Gemini",
         "model.grok": "Grok",
+        "mode.fast": "Fast (OpenAI + Grok)",
+        "mode.quality": "Quality (OpenAI + Grok + Gemini)",
         
         // Status Messages
         "status.ready": "Ready to help! Ask me anything...",
@@ -126,6 +129,7 @@ const translations = {
         "ask.placeholder": "問任何問題...我會諮詢多個 AI 模型並給您全面的答案。\n\n或在下方上傳圖片進行分析！\n\n提示：按 Ctrl+Enter 快速發送！",
         "ask.uploadImage": "上傳圖片（選填）",
         "ask.dragDrop": "或拖放至此",
+        "ask.responseMode": "回應模式",
         "ask.selectModels": "選擇要使用的 AI 模型：",
         "ask.send": "🚀 發送",
         "ask.summaryTitle": "摘要與共識",
@@ -188,6 +192,8 @@ const translations = {
         "model.claude": "Claude",
         "model.gemini": "Gemini",
         "model.grok": "Grok",
+        "mode.fast": "快速（OpenAI + Grok）",
+        "mode.quality": "品質（OpenAI + Grok + Gemini）",
         
         // Status Messages
         "status.ready": "準備就緒！隨時為您服務...",

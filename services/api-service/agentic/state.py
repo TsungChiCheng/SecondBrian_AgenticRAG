@@ -41,3 +41,6 @@ class ConversationState(TypedDict):
 
     # Session Intent
     session_mode: Optional[str] # "RAG" or "NO_RAG"
+
+    # Timing / profiling metadata to identify slow steps in agent flow
+    flow_timing: Dict[str, Any]
