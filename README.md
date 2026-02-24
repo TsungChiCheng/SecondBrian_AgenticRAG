@@ -59,9 +59,9 @@ The agentic RAG pipeline follows these stages:
 
 All LLMs receive the **full retrieved context** injected into their prompts:
 
-- **OpenAI** (gpt-4o) — Primary reasoning model
-- **Gemini** — Fast responses, used for summarization
-- **Grok** — Alternative perspective
+- **OpenAI** (`gpt-4o` for agent reasoning; `OPENAI_MODEL` for parallel calls, default `gpt-5-mini`) — Primary reasoning model
+- **Gemini** (`GEMINI_MODEL`, default `gemini-2.0-flash-exp`) — Fast responses, used for summarization
+- **Grok** (`grok-2-vision-1212`) — Alternative perspective
 
 ---
 
@@ -109,7 +109,7 @@ The agentic workflow operates as a state machine with the following stages:
 
 #### 5. **Call LLMs** (`call_llms_node`)
 - **Purpose**: Parallel fan-out to multiple LLM providers with injected context
-- **Models**: OpenAI (gpt-4o), Gemini (gemini-2.0-flash-exp), Grok (grok-2-vision-1212)
+- **Models**: OpenAI (`OPENAI_MODEL`, default `gpt-5-mini`), Gemini (`GEMINI_MODEL`, default `gemini-2.0-flash-exp`), Grok (`grok-2-vision-1212`)
 - **Context Injection**: 
   - Retrieved context formatted into a structured prompt
   - Session history included for conversational coherence
@@ -274,7 +274,9 @@ Use the provided reset script to perform a clean deployment.
 |----------|---------|-------------|
 | `OPENAI_API_KEY` | — | OpenAI API key (required) |
 | `LOG_LEVEL` | `INFO` | Global log level (`DEBUG`, `INFO`, etc.) |
-| `OPENAI_MODEL` | `gpt-4o` | OpenAI model for reasoning |
+| `OPENAI_MODEL` | `gpt-5-mini` | OpenAI model for parallel LLM calls |
+| `GEMINI_MODEL` | `gemini-2.0-flash-exp` | Gemini model for parallel LLM calls |
+| `GROK_MODEL` | `grok-beta` | Grok model setting (agentic graph currently uses `grok-2-vision-1212`) |
 | `AGENTIC_MAX_ITERATIONS` | `2` | Max RAG retrieval retry limit |
 
 ---
