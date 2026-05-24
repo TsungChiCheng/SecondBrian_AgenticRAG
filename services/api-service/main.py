@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Literal
 import httpx
 import os
 import asyncio
@@ -12,10 +12,17 @@ from config.config import settings
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from uuid import UUID
 from utils.chunk import chunk_text, adaptive_chunk_text
+from utils.wiki_export import build_session_wiki_export_zip, save_session_image_upload
+from utils.llm_wiki_skill import (
+    LlmWikiSkillError,
+    get_llm_wiki_skill_prompt,
+    skill_metadata_for_mode,
+)
 
 # Load environment variables
 load_dotenv()
@@ -127,6 +134,7 @@ class AskRequest(BaseModel):
     session_id: Optional[str] = None  # NEW: Optional session ID for conversation continuity
     selected_models: List[str] = ["OpenAI", "Claude", "Gemini", "Grok"]
     use_agentic_rag: bool = True  # NEW: Enable/disable agentic RAG workflow
+    response_mode: Literal["fast", "llm-wiki"] = "fast"
 
 class AskResponse(BaseModel):
     id: Optional[str] = None  # legacy QA id
@@ -143,6 +151,7 @@ class ImageAnalysisRequest(BaseModel):
     user_query: Optional[str] = None  # Additional text input from user to provide context
     session_id: Optional[str] = None  # Link to conversation if provided
     selected_models: List[str] = ["OpenAI", "Claude", "Gemini", "Grok"]
+    response_mode: Literal["fast", "llm-wiki"] = "fast"
 
 class ImageAnalysisResponse(BaseModel):
     session_id: Optional[str] = None  # Return session id for client continuity
@@ -151,6 +160,27 @@ class ImageAnalysisResponse(BaseModel):
     extracted_text: str
     suggested_search_queries: List[str] = []
     timestamp: str
+
+
+def _skill_prompt_for_mode(response_mode: str) -> Optional[str]:
+    if response_mode != "llm-wiki":
+        return None
+    try:
+        return get_llm_wiki_skill_prompt()
+    except LlmWikiSkillError as exc:
+        logger.exception("Failed to load llm-wiki skill: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+def _prompt_with_skill(user_prompt: str, skill_prompt: Optional[str]) -> str:
+    if not skill_prompt:
+        return user_prompt
+    return (
+        "Apply the following active skill instructions while answering.\n\n"
+        f"{skill_prompt}\n\n"
+        "User request:\n"
+        f"{user_prompt}"
+    )
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -430,7 +460,7 @@ async def get_grok_response(query: str) -> str:
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": os.getenv("GROK_MODEL", "grok-2-1212"),
+                    "model": os.getenv("GROK_MODEL", "grok-4.3"),
                     "messages": [{"role": "user", "content": enhanced_query}],
                     "temperature": float(os.getenv("GROK_TEMPERATURE", "0")),
                     "max_tokens": int(os.getenv("GROK_MAX_TOKENS", "4000"))
@@ -447,7 +477,7 @@ async def get_grok_response(query: str) -> str:
     except Exception as e:
         return f"Grok error: {str(e)[:100]}..."
 
-async def get_gemini_pro_summary(question: str, llm_responses: Dict[str, str]) -> str:
+async def get_gemini_pro_summary(question: str, llm_responses: Dict[str, str], skill_prompt: Optional[str] = None) -> str:
     """Use Gemini 2.0 Pro to create a comprehensive summary from all LLM responses"""
     try:
         api_key = os.getenv("GEMINI_API_KEY")
@@ -467,6 +497,7 @@ async def get_gemini_pro_summary(question: str, llm_responses: Dict[str, str]) -
         current_date = datetime.now().strftime("%B %d, %Y")
         
         # Create summarization prompt
+        skill_section = f"\nActive skill instructions:\n{skill_prompt}\n" if skill_prompt else ""
         summarization_prompt = f"""
 Today's date is {current_date}.
 
@@ -477,6 +508,7 @@ You are an expert AI summarizer. Given the following question and multiple AI mo
 3. Notes any significant differences or contradictions
 4. Provides a balanced, well-structured summary
 5. Maintains accuracy while being concise
+{skill_section}
 
 Original Question: "{question}"
 
@@ -512,7 +544,7 @@ Please provide a comprehensive summary that combines the best insights from all 
     except Exception as e:
         return f"Gemini Pro summary error: {str(e)[:100]}... Fallback: Multiple AI models provided responses to '{question}'"
 
-async def get_openai_summary(question: str, llm_responses: Dict[str, str]) -> str:
+async def get_openai_summary(question: str, llm_responses: Dict[str, str], skill_prompt: Optional[str] = None) -> str:
     """Use OpenAI to create a comprehensive summary from all LLM responses"""
     try:
         print(f"🔹 Starting OpenAI summary generation for: {question[:80]}...")
@@ -533,7 +565,7 @@ async def get_openai_summary(question: str, llm_responses: Dict[str, str]) -> st
         current_date = datetime.now().strftime("%B %d, %Y")
         
         # Create summarization prompt
-        system_prompt = build_summarization_system_prompt(current_date)
+        system_prompt = build_summarization_system_prompt(current_date, skill_prompt)
         
         user_prompt = f"""Question: {question}
 
@@ -590,18 +622,34 @@ Please provide a comprehensive summary that:
         print(f"❌ Exception in OpenAI summary: {error_msg}")
         return error_msg
 
-async def get_smart_summary(question: str, llm_responses: Dict[str, str]) -> str:
+async def get_smart_summary(question: str, llm_responses: Dict[str, str], skill_prompt: Optional[str] = None) -> str:
     """Smart summarization using OpenAI GPT as primary summarization agent"""
+    valid_responses = {
+        model: response
+        for model, response in llm_responses.items()
+        if response and not response.startswith(f"{model} error")
+    }
+    if len(valid_responses) == 1:
+        return next(iter(valid_responses.values())).strip()
+
     try:
         # Use OpenAI GPT for summarization (more reliable than Gemini which hits rate limits)
-        summary = await get_openai_summary(question, llm_responses)
-        return summary
+        summary = await get_openai_summary(question, llm_responses, skill_prompt)
+        if summary and summary.strip():
+            return summary.strip()
+        if valid_responses:
+            return "\n\n".join(response.strip() for response in valid_responses.values() if response.strip())
+        return f"No valid responses to summarize for: '{question}'"
         
     except Exception as e:
         print(f"Error in OpenAI summary, falling back to Gemini: {str(e)}")
         # If OpenAI fails, try Gemini as backup
-        fallback_summary = await get_gemini_pro_summary(question, llm_responses)
-        return fallback_summary
+        fallback_summary = await get_gemini_pro_summary(question, llm_responses, skill_prompt)
+        if fallback_summary and fallback_summary.strip():
+            return fallback_summary.strip()
+        if valid_responses:
+            return "\n\n".join(response.strip() for response in valid_responses.values() if response.strip())
+        return f"No valid responses to summarize for: '{question}'"
 
 @app.get("/health")
 async def health():
@@ -673,6 +721,62 @@ async def get_session_detail(
         raise
     except Exception as e:
         logger.error(f"Error getting session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _export_session_wiki_zip_response(session_id: str, user: User) -> FileResponse:
+    try:
+        UUID(session_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session["user_id"] != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    message_limit = int(os.getenv("WIKI_EXPORT_MESSAGE_LIMIT", "500"))
+    messages = await get_session_messages(session_id, limit=message_limit)
+    export = await build_session_wiki_export_zip(session=session, messages=messages)
+    return FileResponse(
+        path=export.zip_path,
+        media_type="application/zip",
+        filename=export.filename,
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "X-Wiki-Export-Workspace": str(export.workspace_dir),
+        },
+    )
+
+
+@app.get("/sessions/{session_id}/wiki-export.zip")
+async def export_session_wiki_zip(
+    session_id: str,
+    user: User = Depends(get_current_user)
+):
+    """Export the current session as a Graphify-backed LLM wiki zip file."""
+    try:
+        return await _export_session_wiki_zip_response(session_id, user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Session wiki zip export error for %s: %s", session_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/sessions/{session_id}/wiki-export.md")
+async def export_session_wiki_markdown_compat(
+    session_id: str,
+    user: User = Depends(get_current_user)
+):
+    """Compatibility route: old markdown URL now returns the LLM wiki zip archive."""
+    try:
+        return await _export_session_wiki_zip_response(session_id, user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Session wiki compatibility export error for %s: %s", session_id, e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -759,6 +863,8 @@ async def ask_question(
     """Enhanced ask endpoint with session management and agentic RAG"""
     
     logger.debug(f"📝 Processing question from user {user.name} ({user.email}, ID: {user.id[:8]}...): {request.user_input[:50]}...")
+    skill_prompt = _skill_prompt_for_mode(request.response_mode)
+    message_metadata = skill_metadata_for_mode(request.response_mode)
     
     # Session management: Create or use existing session
     session_id = request.session_id
@@ -783,7 +889,7 @@ async def ask_question(
         logger.info(f"Using existing session {session_id}")
     
     # Add user message to session
-    await add_message(session_id, "user", request.user_input)
+    await add_message(session_id, "user", request.user_input, metadata=message_metadata)
     
     # Initialize variables
     summary = ""
@@ -817,6 +923,8 @@ async def ask_question(
                 "should_refine": False,
                 "final_answer": None,
                 "selected_models": request.selected_models,
+                "response_mode": request.response_mode,
+                "skill_prompt": skill_prompt,
                 "flow_timing": {}
             }
             
@@ -887,9 +995,10 @@ async def ask_question(
         # Call selected LLMs concurrently
         tasks = []
         selected_llms = []
+        model_query = _prompt_with_skill(request.user_input, skill_prompt)
         for model in request.selected_models:
             if model in llm_functions:
-                tasks.append(llm_functions[model](request.user_input))
+                tasks.append(llm_functions[model](model_query))
                 selected_llms.append(model)
         
         # Execute all LLM calls concurrently
@@ -905,10 +1014,15 @@ async def ask_question(
             answers = {model: f"{model} response error" for model in request.selected_models}
         
     # Generate comprehensive summary
-    summary = await get_smart_summary(request.user_input, answers)
+    summary = await get_smart_summary(request.user_input, answers, skill_prompt)
     
     # Add assistant message to session
-    await add_message(session_id, "assistant", summary, metadata={"models_used": request.selected_models})
+    await add_message(
+        session_id,
+        "assistant",
+        summary,
+        metadata={**message_metadata, "models_used": request.selected_models},
+    )
     
     # Generate suggested topics using LLM-based extraction
     suggested_topics = []
@@ -973,9 +1087,11 @@ async def ask_question(
                         "timestamp": datetime.now().isoformat(),
                         "chunk_index": idx,
                         "chunk_total": chunk_total,
-                        "chunking_method": "adaptive_markdown",  # Track method used
-                    }
-                })
+                            "chunking_method": "adaptive_markdown",  # Track method used
+                            "response_mode": request.response_mode,
+                            "skill": message_metadata.get("skill"),
+                        }
+                    })
             
             async with httpx.AsyncClient() as client:
                 concept_data = {"concepts": concepts}
@@ -1009,6 +1125,8 @@ async def analyze_image(
     user: User = Depends(get_current_user)  # ← Add authentication
 ):
     """Analyze an image using multiple vision models with optional text context"""
+    skill_prompt = _skill_prompt_for_mode(request.response_mode)
+    message_metadata = skill_metadata_for_mode(request.response_mode)
     
     print(f"📷 Processing image analysis from user {user.name} ({user.email}, ID: {user.id[:8]}...)")
     
@@ -1039,9 +1157,29 @@ async def analyze_image(
         analysis_prompt = request.prompt
         if request.user_query:
             analysis_prompt = f"{request.prompt}\n\nUser's specific question/context: {request.user_query}"
+        analysis_prompt = _prompt_with_skill(analysis_prompt or "", skill_prompt)
         
+        # Store the uploaded image so the session wiki export can run graphify over the real source file.
+        try:
+            image_metadata = save_session_image_upload(
+                user_id=user.id,
+                session_id=session_id,
+                image_base64=request.image_base64,
+                mime_type=request.mime_type,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except OSError as e:
+            logger.exception("Failed to persist uploaded image for session %s: %s", session_id, e)
+            raise HTTPException(status_code=500, detail="Failed to persist uploaded image")
+
         # Store user message in session
-        await add_message(session_id, "user", request.user_query or "[Image uploaded]", metadata={"is_image": True})
+        await add_message(
+            session_id,
+            "user",
+            request.user_query or "[Image uploaded]",
+            metadata={"is_image": True, **message_metadata, **image_metadata},
+        )
         
         # Call selected vision models
         descriptions = {}
@@ -1184,7 +1322,7 @@ async def analyze_image(
                             "Content-Type": "application/json"
                         },
                         json={
-                            "model": "grok-2-vision-1212",
+                            "model": os.getenv("GROK_MODEL", "grok-4.3"),
                             "messages": [{
                                 "role": "user",
                                 "content": [
@@ -1234,13 +1372,18 @@ async def analyze_image(
                 summary = list(valid_descriptions.values())[0]
             else:
                 # Multiple models: use smart summarization with the same prompt sent to LLMs
-                summary = await get_smart_summary(analysis_prompt, valid_descriptions)
+                summary = await get_smart_summary(analysis_prompt, valid_descriptions, skill_prompt)
         else:
             summary = "All models encountered errors analyzing this image."
         
         # Store assistant message in session for continuity
         try:
-            await add_message(session_id, "assistant", summary, metadata={"is_image": True, "models_used": request.selected_models})
+            await add_message(
+                session_id,
+                "assistant",
+                summary,
+                metadata={"is_image": True, **message_metadata, "models_used": request.selected_models},
+            )
         except Exception as e:
             logger.error(f"Failed to add assistant image message to session: {e}")
         
@@ -1306,6 +1449,8 @@ async def analyze_image(
                             "chunk_index": idx,
                             "chunking_method": "adaptive_markdown",
                             "chunk_total": chunk_total,
+                            "response_mode": request.response_mode,
+                            "skill": message_metadata.get("skill"),
                         }
                     })
                 concept_data = {"concepts": concepts}

@@ -38,6 +38,8 @@ class ConversationState(TypedDict):
     
     # Model selection
     selected_models: List[str]  # Which LLMs to use for final answer
+    response_mode: str
+    skill_prompt: Optional[str]
 
     # Session Intent
     session_mode: Optional[str] # "RAG" or "NO_RAG"

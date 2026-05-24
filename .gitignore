@@ -144,6 +144,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Local API runtime data
+services/api-service/data/
+
 # Spyder project settings
 .spyderproject
 .spyproject

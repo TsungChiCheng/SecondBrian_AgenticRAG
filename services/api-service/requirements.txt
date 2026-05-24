@@ -16,6 +16,7 @@ openai==1.109.1
 
 # LangGraph and LangChain for Agentic RAG (versions known to co-install cleanly)
 langgraph==1.0.8
+langgraph-prebuilt==1.0.8  # Keep in lockstep with langgraph; newer 1.0.x prebuilt imports missing runtime symbols.
 langchain-core==1.2.9
 langchain-openai==1.1.7
 langchain-community==0.4.1
@@ -25,6 +26,10 @@ langchain-text-splitters==1.1.0
 tiktoken==0.8.0
 markdown-it-py==3.0.0
 
+# Required for current-session LLM wiki markdown export.
+# Official package name is graphifyy; CLI command is graphify.
+graphifyy==0.8.17
+
 # Database support
 asyncpg==0.29.0
 
@@ -33,7 +38,7 @@ notion-client==2.2.1
 
 # Testing
 pytest==8.0.0
-pytest-asyncio==0.23.0
+pytest-asyncio==0.23.8
 
 # Vector Database (using service instead)
 # chromadb==0.5.17              

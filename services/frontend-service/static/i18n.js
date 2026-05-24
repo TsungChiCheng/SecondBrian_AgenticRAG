@@ -32,6 +32,7 @@ const translations = {
         "ask.responsesTitle": "AI Model Responses",
         "ask.responsesPlaceholder": "Ask a question or upload an image to see answers from multiple AI models",
         "ask.imageAnalysisTitle": "Image Analysis & Search",
+        "ask.exportLlmWiki": "Export LLM Wiki",
         
         // Search Tab
         "search.smartTitle": "Smart Search",
@@ -88,7 +89,7 @@ const translations = {
         "model.gemini": "Gemini",
         "model.grok": "Grok",
         "mode.fast": "Fast (OpenAI + Grok)",
-        "mode.quality": "Quality (OpenAI + Grok + Gemini)",
+        "mode.llmWiki": "Advance (llm-wiki)",
         
         // Status Messages
         "status.ready": "Ready to help! Ask me anything...",
@@ -137,6 +138,7 @@ const translations = {
         "ask.responsesTitle": "AI 模型回應",
         "ask.responsesPlaceholder": "提出問題或上傳圖片以查看多個 AI 模型的答案",
         "ask.imageAnalysisTitle": "圖片分析與搜尋",
+        "ask.exportLlmWiki": "匯出 LLM Wiki",
         
         // Search Tab
         "search.smartTitle": "智慧搜尋",
@@ -193,7 +195,7 @@ const translations = {
         "model.gemini": "Gemini",
         "model.grok": "Grok",
         "mode.fast": "快速（OpenAI + Grok）",
-        "mode.quality": "品質（OpenAI + Grok + Gemini）",
+        "mode.llmWiki": "進階（llm-wiki）",
         
         // Status Messages
         "status.ready": "準備就緒！隨時為您服務...",

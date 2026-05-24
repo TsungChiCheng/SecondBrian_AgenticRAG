@@ -7,6 +7,7 @@ class SecondBrainApp {
         this.bindEvents();
         this.initializeTabs();
         this.initializePage();
+        this.setExportAvailable(Boolean(this.sessionId));
     }
 
     getApiBase() {
@@ -161,6 +162,9 @@ class SecondBrainApp {
         this.summaryEl = document.getElementById('summary');
         this.answersEl = document.getElementById('answers');
         this.statusEl = document.getElementById('status');
+        this.exportMarkdownBtn = document.getElementById('export-markdown');
+        this.exportAvailable = false;
+        this.isExportingMarkdown = false;
         
         // LLM selection checkboxes
         this.openaiCheck = document.getElementById('openai-check');
@@ -220,10 +224,11 @@ class SecondBrainApp {
         // Chat events
         this.sendBtn.addEventListener('click', () => this.handleSendMessage());
         this.newSessionBtn?.addEventListener('click', () => this.handleNewSession());
+        this.exportMarkdownBtn?.addEventListener('click', () => this.handleExportMarkdown());
         this.modelModeRadios?.forEach((radio) => {
             radio.addEventListener('change', () => {
                 if (!radio.checked) return;
-                const mode = radio.value === 'quality' ? 'quality' : 'fast';
+                const mode = radio.value === 'llm-wiki' ? 'llm-wiki' : 'fast';
                 localStorage.setItem('sbModelMode', mode);
                 this.applyModelMode(mode);
             });
@@ -498,11 +503,104 @@ class SecondBrainApp {
         }
     }
 
+    setExportAvailable(available) {
+        if (!this.exportMarkdownBtn) return;
+        this.exportAvailable = Boolean(available);
+        this.exportMarkdownBtn.disabled = this.isExportingMarkdown;
+        this.exportMarkdownBtn.setAttribute('aria-disabled', String(!this.exportAvailable));
+        this.exportMarkdownBtn.classList.toggle('is-unavailable', !this.exportAvailable);
+        this.exportMarkdownBtn.title = available
+            ? 'Download the current session as an LLM Wiki markdown file'
+            : 'Ask a question or analyze an image before exporting an LLM Wiki';
+    }
+
+    setExportLoading(loading) {
+        if (!this.exportMarkdownBtn) return;
+        this.isExportingMarkdown = Boolean(loading);
+        this.exportMarkdownBtn.disabled = this.isExportingMarkdown;
+        this.exportMarkdownBtn.classList.toggle('is-loading', this.isExportingMarkdown);
+        this.exportMarkdownBtn.textContent = this.isExportingMarkdown
+            ? 'Exporting...'
+            : window.languageManager.t('ask.exportLlmWiki');
+    }
+
+    getDownloadFilename(contentDisposition) {
+        if (!contentDisposition) return null;
+        const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+        if (utf8Match) return decodeURIComponent(utf8Match[1]);
+        const asciiMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+        return asciiMatch ? asciiMatch[1] : null;
+    }
+
+    async handleExportMarkdown() {
+        if (this.isExportingMarkdown) return;
+
+        if (!this.sessionId || !this.exportAvailable) {
+            this.showStatus('Ask a question or analyze an image before exporting an LLM Wiki.', 'error');
+            return;
+        }
+
+        this.setExportLoading(true);
+        this.showStatus('Preparing LLM Wiki zip. Graphify can take several minutes for larger sessions or images...', 'info');
+
+        try {
+            const response = await fetch(`${this.apiBase}/sessions/${encodeURIComponent(this.sessionId)}/wiki-export.zip`, {
+                method: 'GET',
+                headers: this.getAuthHeaders()
+            });
+
+            if (response.status === 401) {
+                window.location.href = '/login.html';
+                throw new Error('Authentication required. Redirecting to login...');
+            }
+
+            if (!response.ok) {
+                let errorMessage = `${response.status} ${response.statusText}`;
+                const text = await response.text();
+                if (text) {
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.detail) errorMessage += `\n${data.detail}`;
+                    } catch (e) {
+                        errorMessage += `\n${text}`;
+                    }
+                }
+                throw new Error(errorMessage);
+            }
+
+            const blob = await response.blob();
+            const filename = this.getDownloadFilename(response.headers.get('Content-Disposition'))
+                || `second-brain-session-${this.sessionId}.zip`;
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            const safeFilename = this.escapeHtml(filename);
+            const safeUrl = this.escapeHtml(url);
+            this.showStatus(
+                `LLM Wiki zip ready. <a href="${safeUrl}" download="${safeFilename}">Download again</a>`,
+                'success',
+                60000
+            );
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch (error) {
+            console.error('LLM Wiki export error:', error);
+            this.showStatus(`LLM Wiki export failed: ${this.escapeHtml(error.message)}`, 'error');
+        } finally {
+            this.setExportLoading(false);
+            this.setExportAvailable(Boolean(this.sessionId));
+        }
+    }
+
     initializeModelMode() {
         if (!this.modelModeRadios || this.modelModeRadios.length === 0) return;
 
         const savedMode = localStorage.getItem('sbModelMode');
-        const mode = savedMode === 'quality' ? 'quality' : 'fast';
+        const mode = (savedMode === 'llm-wiki' || savedMode === 'quality') ? 'llm-wiki' : 'fast';
         this.modelModeRadios.forEach((radio) => {
             radio.checked = (radio.value === mode);
         });
@@ -512,20 +610,20 @@ class SecondBrainApp {
     getCurrentModelMode() {
         if (!this.modelModeRadios || this.modelModeRadios.length === 0) return null;
         const selected = Array.from(this.modelModeRadios).find((radio) => radio.checked);
-        return selected?.value === 'quality' ? 'quality' : 'fast';
+        return selected?.value === 'llm-wiki' ? 'llm-wiki' : 'fast';
     }
 
     applyModelMode(mode) {
         if (!this.openaiCheck || !this.geminiCheck || !this.grokCheck) return;
 
-        if (mode === 'quality') {
+        if (mode === 'llm-wiki') {
             this.openaiCheck.checked = true;
             this.geminiCheck.checked = true;
             this.grokCheck.checked = true;
             return;
         }
 
-        // Fast mode: keep strong speed/quality balance without Gemini latency.
+        // Fast mode: keep the low-latency model set without Gemini.
         this.openaiCheck.checked = true;
         this.geminiCheck.checked = false;
         this.grokCheck.checked = true;
@@ -535,7 +633,7 @@ class SecondBrainApp {
         const mode = this.getCurrentModelMode();
         if (mode) {
             this.applyModelMode(mode);
-            if (mode === 'quality') return ['OpenAI', 'Gemini', 'Grok'];
+            if (mode === 'llm-wiki') return ['OpenAI', 'Gemini', 'Grok'];
             return ['OpenAI', 'Grok'];
         }
 
@@ -568,6 +666,7 @@ class SecondBrainApp {
         }
 
         const selectedModels = this.getSelectedModels();
+        const responseMode = this.getCurrentModelMode() === 'llm-wiki' ? 'llm-wiki' : 'fast';
         if (selectedModels.length === 0) {
             this.showStatus(window.languageManager.t('status.pleaseSelect'), 'error');
             return;
@@ -581,7 +680,8 @@ class SecondBrainApp {
             const data = await this.postJSON('/ask', { 
                 user_input: prompt,
                 selected_models: selectedModels,
-                session_id: this.sessionId
+                session_id: this.sessionId,
+                response_mode: responseMode
             });
             
             // Cache session id returned by API (auto-created on first turn)
@@ -589,6 +689,7 @@ class SecondBrainApp {
                 this.sessionId = data.session_id;
                 localStorage.setItem('sbSessionId', data.session_id);
             }
+            this.setExportAvailable(Boolean(this.sessionId));
             
             this.displaySummary(data.summary);
             this.displayAnswers(data.answers, data.related_knowledge, data.suggested_topics);
@@ -615,9 +716,11 @@ class SecondBrainApp {
             if (data.session_id) {
                 this.sessionId = data.session_id;
                 localStorage.setItem('sbSessionId', data.session_id);
+                this.setExportAvailable(true);
             } else {
                 this.sessionId = null;
                 localStorage.removeItem('sbSessionId');
+                this.setExportAvailable(false);
             }
             this.clearResults();
             this.promptInput.value = '';
@@ -1030,19 +1133,22 @@ class SecondBrainApp {
     clearResults() {
         this.summaryEl.textContent = window.languageManager.t('ask.summaryPlaceholder');
         this.answersEl.innerHTML = `<div class="answer-item">${window.languageManager.t('ask.responsesPlaceholder')}</div>`;
+        this.setExportAvailable(false);
         if (this.imageAnalysisCard) {
             this.imageAnalysisCard.style.display = 'none';
             this.imageResultsContent.innerHTML = '';
         }
     }
 
-    showStatus(message, type = 'info') {
+    showStatus(message, type = 'info', durationMs = 5000) {
         this.statusEl.innerHTML = `<div class="status-message status-${type}">${message}</div>`;
-        setTimeout(() => {
-            if (this.statusEl.innerHTML.includes(message)) {
-                this.statusEl.innerHTML = '';
-            }
-        }, 5000);
+        if (durationMs > 0) {
+            setTimeout(() => {
+                if (this.statusEl.innerHTML.includes(message)) {
+                    this.statusEl.innerHTML = '';
+                }
+            }, durationMs);
+        }
     }
 
     showToolStatus(tool, message, type = 'info') {
@@ -1584,6 +1690,7 @@ class SecondBrainApp {
         
         // Get selected models from main LLM checkboxes
         const selectedModels = this.getSelectedModels();
+        const responseMode = this.getCurrentModelMode() === 'llm-wiki' ? 'llm-wiki' : 'fast';
         
         if (selectedModels.length === 0) {
             this.showStatus(window.languageManager.t('status.pleaseSelect'), 'error');
@@ -1623,7 +1730,8 @@ class SecondBrainApp {
                     mime_type: mimeType,
                     prompt: "Describe what's in this image in detail. Extract any text, concepts, or key information that could be searched.",
                     session_id: this.sessionId,
-                    selected_models: selectedModels
+                    selected_models: selectedModels,
+                    response_mode: responseMode
                 })
             });
             
@@ -1638,6 +1746,7 @@ class SecondBrainApp {
                 this.sessionId = result.session_id;
                 localStorage.setItem('sbSessionId', result.session_id);
             }
+            this.setExportAvailable(Boolean(this.sessionId));
             
             // Display in main results section
             this.displaySummary(result.summary);

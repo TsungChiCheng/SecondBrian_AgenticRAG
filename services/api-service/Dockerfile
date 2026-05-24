@@ -31,7 +31,8 @@ RUN python -m pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create non-root user
-RUN useradd --create-home --shell /bin/bash app && \
+RUN mkdir -p /app/data && \
+    useradd --create-home --shell /bin/bash app && \
     chown -R app:app /app
 USER app
 

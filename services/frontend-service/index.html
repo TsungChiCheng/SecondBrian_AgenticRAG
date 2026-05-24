@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Second Brain - AI Knowledge Assistant</title>
-    <link rel="stylesheet" href="static/style.css">
+    <link rel="stylesheet" href="static/style.css?v=20260524f">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
     <!-- D3.js for knowledge graph visualization -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -111,8 +111,8 @@
                                         <span data-i18n="mode.fast">Fast (OpenAI + Grok)</span>
                                     </label>
                                     <label class="mode-radio-label">
-                                        <input type="radio" name="model-mode" value="quality" class="mode-radio">
-                                        <span data-i18n="mode.quality">Quality (OpenAI + Grok + Gemini)</span>
+                                        <input type="radio" name="model-mode" value="llm-wiki" class="mode-radio">
+                                        <span data-i18n="mode.llmWiki">Advance (llm-wiki)</span>
                                     </label>
                                 </div>
                             </div>
@@ -162,6 +162,11 @@
                     <div class="result-card">
                         <h3 data-i18n="ask.summaryTitle">📋 Summary & Consensus</h3>
                         <div id="summary" class="summary-content" data-i18n="ask.summaryPlaceholder">(Ask a question or upload an image to see the AI consensus summary)</div>
+                        <div class="result-actions">
+                            <button id="export-markdown" class="btn-secondary" type="button" disabled data-i18n="ask.exportLlmWiki">
+                                Export LLM Wiki
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Individual Answers -->
@@ -462,7 +467,7 @@
         });
     </script>
     <!-- Then load application with cache busting -->
-    <script src="static/app.js?v=20250129c"></script>
+    <script src="static/app.js?v=20260524f"></script>
     <script>
         // Inline tab switching function - loads immediately
         function switchTab(tabName) {

@@ -43,22 +43,44 @@ IMAGE_ANALYSIS_PROMPT = (
 )
 
 
-def build_summarization_system_prompt(current_date: str) -> str:
+def build_summarization_system_prompt(current_date: str, skill_prompt: str | None = None) -> str:
     """Build the system prompt for multi-model summarization."""
+    skill_section = ""
+    if skill_prompt:
+        skill_section = f"""
+
+Active skill instructions:
+
+{skill_prompt}
+"""
+
     return f"""Today's date is {current_date}.
 You are an expert at synthesizing information from multiple AI sources. 
 Create a comprehensive, accurate summary that combines the best insights from all responses.
 Focus on factual information and avoid speculation.
+{skill_section}
 
 Formatting: For longer summaries, use markdown structure with ## for main sections and ### for subsections."""
 
 
-def build_answer_system_prompt(context: str, history: str) -> str:
+def build_answer_system_prompt(context: str, history: str, skill_prompt: str | None = None) -> str:
     """Build the system prompt for the answer-generating agent."""
+    skill_section = ""
+    if skill_prompt:
+        skill_section = f"""
+
+## Active Skill: llm-wiki
+
+Apply these skill instructions to the final answer:
+
+{skill_prompt}
+"""
+
     return f"""You are a helpful AI assistant with access to a knowledge base and conversation history.
 
 {context}
 {history}
+{skill_section}
 
 Instructions:
 - Answer the user's question accurately and concisely

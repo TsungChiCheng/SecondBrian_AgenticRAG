@@ -350,6 +350,9 @@ def _build_conversation_prompt(state: ConversationState, include_history: int = 
     
     # Add the current question
     parts.append(f"## Current question:\n{state['current_query']}")
+
+    if state.get("skill_prompt"):
+        parts.append("## Active Skill Instructions\n" + state["skill_prompt"])
     
     # Add instruction
     parts.append("\nPlease answer based on the retrieved context above. If the context contains relevant past discussions, use that information to answer.")
@@ -452,7 +455,7 @@ async def _call_grok(query: str):
                 "https://api.x.ai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 json={
-                    "model": "grok-2-vision-1212",
+                    "model": os.getenv("GROK_MODEL", "grok-4.3"),
                     "messages": [{"role": "user", "content": query}],
                     "max_tokens": 1200,
                 },
@@ -567,7 +570,7 @@ async def generate_answer_node(state: ConversationState) -> ConversationState:
             history_str += f"\n{msg['role']}: {msg['content']}"
     
     # Create the prompt
-    system_prompt = build_answer_system_prompt(context_str, history_str)
+    system_prompt = build_answer_system_prompt(context_str, history_str, state.get("skill_prompt"))
     
     messages = [
         SystemMessage(content=system_prompt),
