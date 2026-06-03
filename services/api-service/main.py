@@ -162,6 +162,11 @@ class ImageAnalysisResponse(BaseModel):
     timestamp: str
 
 
+# Latest OpenAI model used exclusively by the "llm-wiki" response mode.
+# Kept separate from the global OPENAI_MODEL default so other paths are unaffected.
+WIKI_OPENAI_MODEL = os.getenv("WIKI_OPENAI_MODEL", "gpt-5.5")
+
+
 def _skill_prompt_for_mode(response_mode: str) -> Optional[str]:
     if response_mode != "llm-wiki":
         return None
@@ -326,18 +331,18 @@ Examples:
         return []  # Return empty on any error
 
 # Direct HTTP LLM calls to avoid dependency issues
-async def get_openai_response(query: str) -> str:
+async def get_openai_response(query: str, model: Optional[str] = None) -> str:
     """Get response from OpenAI using direct HTTP"""
     try:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             return f"OpenAI response for: '{query}' (API key not configured)"
-        
+
         # Add current date context to the query
         current_date = datetime.now().strftime("%B %d, %Y")
         enhanced_query = f"Today's date is {current_date}. {query}"
-        
-        model = os.getenv("OPENAI_MODEL", settings.OPENAI_MODEL)
+
+        model = model or os.getenv("OPENAI_MODEL", settings.OPENAI_MODEL)
         # GPT-5 and reasoning models have different parameter requirements
         is_new_model = model.startswith("gpt-5") or model.startswith("o1") or model.startswith("o3")
         
@@ -373,13 +378,13 @@ async def get_openai_response(query: str) -> str:
     except Exception as e:
         return f"OpenAI error: {str(e)[:100]}..."
 
-async def get_claude_response(query: str) -> str:
+async def get_claude_response(query: str, model: Optional[str] = None) -> str:
     """Get response from Claude using direct HTTP"""
     try:
         api_key = os.getenv("CLAUDE_API_KEY")
         if not api_key:
             return f"Claude response for: '{query}' (API key not configured)"
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.anthropic.com/v1/messages",
@@ -389,7 +394,7 @@ async def get_claude_response(query: str) -> str:
                     "anthropic-version": "2023-06-01"
                 },
                 json={
-                    "model": os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
+                    "model": model or os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
                     "max_tokens": int(os.getenv("CLAUDE_MAX_TOKENS", "4000")),
                     "temperature": float(os.getenv("CLAUDE_TEMPERATURE", "0")),
                     "messages": [{"role": "user", "content": query}]
@@ -998,7 +1003,11 @@ async def ask_question(
         model_query = _prompt_with_skill(request.user_input, skill_prompt)
         for model in request.selected_models:
             if model in llm_functions:
-                tasks.append(llm_functions[model](model_query))
+                if model == "OpenAI" and request.response_mode == "llm-wiki":
+                    # llm-wiki runs solely on the latest OpenAI model.
+                    tasks.append(get_openai_response(model_query, model=WIKI_OPENAI_MODEL))
+                else:
+                    tasks.append(llm_functions[model](model_query))
                 selected_llms.append(model)
         
         # Execute all LLM calls concurrently
@@ -1191,6 +1200,24 @@ async def analyze_image(
                 if not api_key:
                     return ("OpenAI", "OpenAI API key not configured")
                 
+                # llm-wiki uses the latest OpenAI model; other modes keep gpt-4o vision.
+                vision_model = WIKI_OPENAI_MODEL if request.response_mode == "llm-wiki" else "gpt-4o"
+                vision_json = {
+                    "model": vision_model,
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": analysis_prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:{request.mime_type};base64,{request.image_base64}"}}
+                        ]
+                    }],
+                }
+                # GPT-5/o-series models use max_completion_tokens and reject max_tokens.
+                if vision_model.startswith(("gpt-5", "o1", "o3")):
+                    vision_json["max_completion_tokens"] = 2000
+                else:
+                    vision_json["max_tokens"] = 2000
+
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(
                         "https://api.openai.com/v1/chat/completions",
@@ -1198,17 +1225,7 @@ async def analyze_image(
                             "Authorization": f"Bearer {api_key}",
                             "Content-Type": "application/json"
                         },
-                        json={
-                            "model": "gpt-4o",
-                            "messages": [{
-                                "role": "user",
-                                "content": [
-                                    {"type": "text", "text": analysis_prompt},
-                                    {"type": "image_url", "image_url": {"url": f"data:{request.mime_type};base64,{request.image_base64}"}}
-                                ]
-                            }],
-                            "max_tokens": 2000
-                        }
+                        json=vision_json
                     )
                     if response.status_code == 200:
                         result = response.json()

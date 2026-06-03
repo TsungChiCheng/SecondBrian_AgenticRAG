@@ -1,16 +1,19 @@
-<svg width="1100" height="400" viewBox="0 0 1100 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Agent flow chart">
+<svg width="1120" height="472" viewBox="0 0 1120 472" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Agentic RAG flow chart">
   <defs>
     <style>
       .bg { fill:#ffffff; }
       .box { fill:#f3f4ff; stroke:#4338ca; stroke-width:1.6; rx:10; }
+      .refine { fill:#eef2ff; stroke:#6366f1; stroke-width:1.4; stroke-dasharray:5,3; rx:10; }
       .tool { fill:#e0f7fa; stroke:#0284c7; stroke-width:1.2; rx:8; }
       .memory { fill:#fef3c7; stroke:#d97706; stroke-width:1.2; rx:8; }
+      .end { fill:#dcfce7; stroke:#16a34a; stroke-width:1.6; rx:16; }
       .text { font: 13px 'Inter', 'Helvetica', sans-serif; fill:#0f172a; }
       .sub  { font: 11px 'Inter','Helvetica',sans-serif; fill:#475569; }
       .title { font: 13px 'Inter', 'Helvetica', sans-serif; font-weight:700; fill:#0f172a; }
-      .arrow { stroke:#0f172a; stroke-width:1.4; marker-end:url(#arrowhead); }
-      .ctx-arrow { stroke:#059669; stroke-width:1.4; stroke-dasharray:4,2; marker-end:url(#ctxarrow); }
-      .dashed { stroke:#64748b; stroke-width:1.4; stroke-dasharray: 4 2; marker-end:url(#arrowhead); }
+      .arrow { stroke:#0f172a; stroke-width:1.4; marker-end:url(#arrowhead); fill:none; }
+      .ctx-arrow { stroke:#059669; stroke-width:1.4; stroke-dasharray:4,2; marker-end:url(#ctxarrow); fill:none; }
+      .dashed { stroke:#64748b; stroke-width:1.4; stroke-dasharray:5,3; marker-end:url(#arrowhead); fill:none; }
+      .loop { stroke:#6366f1; stroke-width:1.4; marker-end:url(#looparrow); fill:none; }
     </style>
     <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#0f172a"/>
@@ -18,93 +21,121 @@
     <marker id="ctxarrow" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#059669"/>
     </marker>
+    <marker id="looparrow" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6366f1"/>
+    </marker>
   </defs>
 
-  <rect class="bg" x="0" y="0" width="1100" height="400" rx="16" />
+  <rect class="bg" x="0" y="0" width="1120" height="472" rx="16" />
 
-  <!-- Main flow boxes -->
-  <!-- 1. Classifier (New) -->
-  <rect class="box" x="30" y="40" width="170" height="70"/>
-  <text class="title" x="115" y="70" text-anchor="middle">Session Classifier</text>
-  <text class="text"  x="115" y="90" text-anchor="middle">classify_session</text>
-  <text class="sub"   x="115" y="106" text-anchor="middle">LLM: gpt-4o</text>
+  <!-- ===== Refinement loop node (top) ===== -->
+  <rect class="refine" x="430" y="6" width="170" height="46"/>
+  <text class="title" x="515" y="25" text-anchor="middle">Refine Query</text>
+  <text class="sub"   x="515" y="40" text-anchor="middle">refine_query · loop when no context (≤ max_iter)</text>
 
-  <!-- 2. Routing Agent (Shifted +200) -->
-  <rect class="box" x="230" y="40" width="170" height="70"/>
-  <text class="title" x="315" y="70" text-anchor="middle">Routing Agent</text>
-  <text class="text"  x="315" y="90" text-anchor="middle">route_query</text>
-  <text class="sub"   x="315" y="106" text-anchor="middle">LLM: gpt-4o</text>
+  <!-- ===== Main pipeline row ===== -->
+  <!-- 1. Session Classifier -->
+  <rect class="box" x="30" y="74" width="170" height="64"/>
+  <text class="title" x="115" y="100" text-anchor="middle">Session Classifier</text>
+  <text class="text"  x="115" y="118" text-anchor="middle">classify_session</text>
+  <text class="sub"   x="115" y="132" text-anchor="middle">RAG / NO_RAG decision</text>
 
-  <!-- 3. Retriever (Shifted +200) -->
-  <rect class="box" x="430" y="40" width="170" height="70"/>
-  <text class="title" x="515" y="70" text-anchor="middle">Retriever</text>
-  <text class="text"  x="515" y="90" text-anchor="middle">retrieve_context</text>
-  <text class="sub"   x="515" y="106" text-anchor="middle">3 sources (no LLM)</text>
+  <!-- 2. Routing Agent -->
+  <rect class="box" x="230" y="74" width="170" height="64"/>
+  <text class="title" x="315" y="100" text-anchor="middle">Routing Agent</text>
+  <text class="text"  x="315" y="118" text-anchor="middle">route_query</text>
+  <text class="sub"   x="315" y="132" text-anchor="middle">retrieve / skip decision</text>
 
-  <!-- 4. Model Fan-out (Shifted +200) -->
-  <rect class="box" x="630" y="40" width="170" height="70"/>
-  <text class="title" x="715" y="70" text-anchor="middle">Model Fan-out</text>
-  <text class="text"  x="715" y="90" text-anchor="middle">call_llms</text>
-  <text class="sub"   x="715" y="106" text-anchor="middle">Parallel + context</text>
+  <!-- 3. Retriever -->
+  <rect class="box" x="430" y="74" width="170" height="64"/>
+  <text class="title" x="515" y="100" text-anchor="middle">Retriever</text>
+  <text class="text"  x="515" y="118" text-anchor="middle">retrieve_context</text>
+  <text class="sub"   x="515" y="132" text-anchor="middle">3 sources (no LLM)</text>
 
-  <!-- 5. Answer Generator (Shifted +200) -->
-  <rect class="box" x="830" y="40" width="170" height="70"/>
-  <text class="title" x="915" y="70" text-anchor="middle">Answer Generator</text>
-  <text class="text"  x="915" y="90" text-anchor="middle">generate_answer</text>
-  <text class="sub"   x="915" y="106" text-anchor="middle">LLM: gpt-4o</text>
+  <!-- 4. Model Fan-out -->
+  <rect class="box" x="630" y="74" width="170" height="64"/>
+  <text class="title" x="715" y="100" text-anchor="middle">Model Fan-out</text>
+  <text class="text"  x="715" y="118" text-anchor="middle">call_llms</text>
+  <text class="sub"   x="715" y="132" text-anchor="middle">parallel + context + skill</text>
 
-  <!-- Retriever tools (Shifted +200) -->
-  <rect class="tool" x="440" y="140" width="150" height="35"/>
-  <text class="text" x="515" y="162" text-anchor="middle">semantic_search</text>
+  <!-- 5. Answer Generator -->
+  <rect class="box" x="830" y="74" width="170" height="64"/>
+  <text class="title" x="915" y="100" text-anchor="middle">Answer Generator</text>
+  <text class="text"  x="915" y="118" text-anchor="middle">generate_answer</text>
+  <text class="sub"   x="915" y="132" text-anchor="middle">synthesize + skill</text>
 
-  <rect class="memory" x="440" y="185" width="150" height="35"/>
-  <text class="text" x="515" y="207" text-anchor="middle">user_memories</text>
+  <!-- END -->
+  <rect class="end" x="1035" y="90" width="60" height="34"/>
+  <text class="title" x="1065" y="111" text-anchor="middle" fill="#15803d">END</text>
 
-  <rect class="tool" x="440" y="230" width="150" height="35"/>
-  <text class="text" x="515" y="252" text-anchor="middle">session_history</text>
+  <!-- ===== Main flow arrows ===== -->
+  <line class="arrow" x1="200" y1="106" x2="230" y2="106"/> <!-- classify -> route -->
+  <line class="arrow" x1="400" y1="106" x2="430" y2="106"/> <!-- route -> retrieve -->
+  <line class="arrow" x1="600" y1="106" x2="630" y2="106"/> <!-- retrieve -> fan-out -->
+  <line class="arrow" x1="800" y1="106" x2="830" y2="106"/> <!-- fan-out -> answer -->
+  <line class="arrow" x1="1000" y1="106" x2="1035" y2="106"/> <!-- answer -> END -->
 
-  <!-- LLM targets (Shifted +200) -->
-  <rect class="tool" x="650" y="140" width="130" height="35"/>
-  <text class="text" x="715" y="162" text-anchor="middle">OpenAI</text>
+  <!-- ===== Refinement loop arrows (retrieve <-> refine) ===== -->
+  <line class="loop" x1="498" y1="74" x2="498" y2="52"/> <!-- retrieve -> refine (up) -->
+  <line class="loop" x1="532" y1="52" x2="532" y2="74"/> <!-- refine -> retrieve (down) -->
+  <text class="sub" x="470" y="68" text-anchor="end" fill="#6366f1">no ctx</text>
+  <text class="sub" x="560" y="68" text-anchor="start" fill="#6366f1">retry</text>
 
-  <rect class="tool" x="650" y="185" width="130" height="35"/>
-  <text class="text" x="715" y="207" text-anchor="middle">Gemini</text>
+  <!-- ===== NO_RAG bypass: classify -> call_llms ===== -->
+  <polyline class="dashed" points="115,138 115,352 612,352 612,112 630,112"/>
+  <text class="sub" x="300" y="346" text-anchor="middle">NO_RAG · skip retrieval &amp; routing</text>
 
-  <rect class="tool" x="650" y="230" width="130" height="35"/>
-  <text class="text" x="715" y="252" text-anchor="middle">Grok</text>
+  <!-- ===== Skip-retrieval bypass: route -> call_llms ===== -->
+  <polyline class="dashed" points="408,138 408,382 624,382 624,122 630,122"/>
+  <text class="sub" x="500" y="376" text-anchor="middle">no retrieval needed</text>
 
-  <!-- Session Manager (Shifted +200 approx) -->
-  <rect class="tool" x="250" y="200" width="150" height="45" fill="#fff7ed" stroke="#c2410c" stroke-width="1.2" rx="10"/>
-  <text class="title" x="325" y="225" text-anchor="middle" fill="#b45309">Session Manager</text>
-  <text class="text"  x="325" y="242" text-anchor="middle">create / store messages</text>
+  <!-- ===== Retriever sources ===== -->
+  <rect class="tool" x="440" y="160" width="150" height="42"/>
+  <text class="text" x="515" y="178" text-anchor="middle">semantic_search</text>
+  <text class="sub"  x="515" y="193" text-anchor="middle">Qdrant vectors (k=5)</text>
 
-  <!-- Main flow arrows (Shifted logic) -->
-  <line class="arrow" x1="200" y1="75" x2="230" y2="75"/> <!-- Classify -> Route -->
-  <line class="arrow" x1="400" y1="75" x2="430" y2="75"/> <!-- Route -> Retrieve -->
-  <line class="arrow" x1="600" y1="75" x2="630" y2="75"/> <!-- Retrieve -> Fan-out -->
-  <line class="arrow" x1="800" y1="75" x2="830" y2="75"/> <!-- Fan-out -> Answer -->
+  <rect class="memory" x="440" y="210" width="150" height="42"/>
+  <text class="text" x="515" y="228" text-anchor="middle">user_memories</text>
+  <text class="sub"  x="515" y="243" text-anchor="middle">PostgreSQL · cross-session</text>
 
-  <!-- NO_RAG Path (Direct Classifier -> Fan-out) -->
-  <polyline class="dashed" points="115,110 115,130 615,130 615,90 630,90" fill="none"/>
-  <text class="sub" x="350" y="125" text-anchor="middle">NO_RAG</text>
+  <rect class="tool" x="440" y="260" width="150" height="42"/>
+  <text class="text" x="515" y="278" text-anchor="middle">session_history</text>
+  <text class="sub"  x="515" y="293" text-anchor="middle">current session only</text>
 
-  <!-- Retriever to tools (Shifted +200 to x=515) -->
-  <line class="arrow" x1="515" y1="110" x2="515" y2="140"/>
-  <line class="arrow" x1="515" y1="175" x2="515" y2="185"/>
-  <line class="arrow" x1="515" y1="220" x2="515" y2="230"/>
+  <line class="arrow" x1="515" y1="138" x2="515" y2="160"/>
+  <line class="arrow" x1="515" y1="202" x2="515" y2="210"/>
+  <line class="arrow" x1="515" y1="252" x2="515" y2="260"/>
 
-  <!-- LLM fan-out arrows (Shifted +200 to x=715) -->
-  <line class="arrow" x1="715" y1="110" x2="715" y2="140"/>
-  <line class="arrow" x1="715" y1="175" x2="715" y2="185"/>
-  <line class="arrow" x1="715" y1="220" x2="715" y2="230"/>
+  <!-- ===== Fan-out target (provider-agnostic) ===== -->
+  <rect class="tool" x="645" y="170" width="140" height="50"/>
+  <text class="text" x="715" y="191" text-anchor="middle">selected models</text>
+  <text class="sub"  x="715" y="207" text-anchor="middle">user-chosen · called in parallel</text>
+  <line class="arrow" x1="715" y1="138" x2="715" y2="170"/>
 
-  <!-- Session manager arrows (Shifted targets) -->
-  <line class="arrow" x1="325" y1="185" x2="325" y2="200"/> <!-- From Route (approx) to Session Manager -->
-  <!-- Note: Route is at 230-400. center 315. Adjusted Session Manager to x=250 (center 325) fits well -->
-  <line class="arrow" x1="315" y1="110" x2="325" y2="200"/> <!-- Route -> Manager (simplified vertical) -->
+  <!-- ===== Session Manager ===== -->
+  <rect x="230" y="176" width="170" height="46" fill="#fff7ed" stroke="#c2410c" stroke-width="1.2" rx="10"/>
+  <text class="title" x="315" y="198" text-anchor="middle" fill="#b45309">Session Manager</text>
+  <text class="sub"   x="315" y="213" text-anchor="middle">create / store messages</text>
+  <line class="arrow" x1="315" y1="138" x2="315" y2="176"/>
 
-  <!-- Source labels (Shifted +200 to x=515) -->
-  <text class="sub" x="515" y="285" text-anchor="middle">Qdrant vectors</text>
-  <text class="sub" x="515" y="300" text-anchor="middle">PostgreSQL (cross-session)</text>
-  <text class="sub" x="515" y="315" text-anchor="middle">Current session only</text>
+  <!-- ===== Active Skill (llm-wiki) annotation ===== -->
+  <rect class="memory" x="828" y="170" width="184" height="84"/>
+  <text class="title" x="920" y="190" text-anchor="middle" fill="#b45309">Active Skill (optional)</text>
+  <text class="sub"   x="920" y="208" text-anchor="middle">response_mode = "llm-wiki"</text>
+  <text class="sub"   x="920" y="223" text-anchor="middle">skill_prompt → fan-out + answer</text>
+  <text class="sub"   x="920" y="238" text-anchor="middle">dedicated wiki model + export</text>
+  <path class="ctx-arrow" d="M915,138 L915,170"/>
+
+  <!-- ===== Legend ===== -->
+  <text class="sub" x="30" y="424">Legend:</text>
+  <line class="arrow" x1="90" y1="420" x2="120" y2="420"/>
+  <text class="sub" x="126" y="424">primary flow</text>
+  <line class="dashed" x1="220" y1="420" x2="250" y2="420"/>
+  <text class="sub" x="256" y="424">conditional bypass</text>
+  <line class="ctx-arrow" x1="380" y1="420" x2="410" y2="420"/>
+  <text class="sub" x="416" y="424">skill context</text>
+  <line class="loop" x1="520" y1="420" x2="550" y2="420"/>
+  <text class="sub" x="556" y="424">refinement loop</text>
+
+  <text class="sub" x="30" y="452">Agentic RAG · services/api-service/agentic/graph.py</text>
 </svg>

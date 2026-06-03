@@ -89,7 +89,7 @@ const translations = {
         "model.gemini": "Gemini",
         "model.grok": "Grok",
         "mode.fast": "Fast (OpenAI + Grok)",
-        "mode.llmWiki": "Advance (llm-wiki)",
+        "mode.llmWiki": "LLM-wiki",
         
         // Status Messages
         "status.ready": "Ready to help! Ask me anything...",
@@ -195,7 +195,7 @@ const translations = {
         "model.gemini": "Gemini",
         "model.grok": "Grok",
         "mode.fast": "快速（OpenAI + Grok）",
-        "mode.llmWiki": "進階（llm-wiki）",
+        "mode.llmWiki": "LLM-wiki",
         
         // Status Messages
         "status.ready": "準備就緒！隨時為您服務...",

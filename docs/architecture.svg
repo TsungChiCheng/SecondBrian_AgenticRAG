@@ -1,81 +1,119 @@
-<svg width="820" height="380" viewBox="0 0 820 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="System architecture">
+<svg width="880" height="412" viewBox="0 0 880 412" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="System architecture">
   <defs>
     <style>
       .bg { fill:#ffffff; }
       .box { fill:#eef2ff; stroke:#4338ca; stroke-width:1.6; rx:10; }
       .db  { fill:#fef9c3; stroke:#d97706; stroke-width:1.2; rx:10; }
       .vec { fill:#ecfeff; stroke:#0284c7; stroke-width:1.2; rx:10; }
-      .mem { fill:#f0fdf4; stroke:#059669; stroke-width:1.2; rx:10; }
+      .ext { fill:#f0fdf4; stroke:#059669; stroke-width:1.4; rx:10; }
+      .opt { fill:#f8fafc; stroke:#94a3b8; stroke-width:1.4; stroke-dasharray:5,3; rx:10; }
+      .client { fill:#f5f3ff; stroke:#7c3aed; stroke-width:1.4; rx:10; }
       .text { font: 13px 'Inter','Helvetica',sans-serif; fill:#0f172a; }
       .title { font: 13px 'Inter','Helvetica',sans-serif; font-weight:700; fill:#0f172a; }
       .sub  { font: 11px 'Inter','Helvetica',sans-serif; fill:#475569; }
-      .arrow { stroke:#0f172a; stroke-width:1.4; marker-end:url(#arrowhead); }
-      .mem-arrow { stroke:#059669; stroke-width:1.4; stroke-dasharray:4,2; marker-end:url(#memarrow); }
+      .lbl  { font: 10.5px 'Inter','Helvetica',sans-serif; fill:#334155; }
+      .arrow { stroke:#0f172a; stroke-width:1.4; marker-end:url(#arrowhead); fill:none; }
+      .ext-arrow { stroke:#059669; stroke-width:1.4; marker-end:url(#extarrow); fill:none; }
+      .opt-arrow { stroke:#94a3b8; stroke-width:1.4; stroke-dasharray:5,3; marker-end:url(#optarrow); fill:none; }
     </style>
     <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#0f172a"/>
     </marker>
-    <marker id="memarrow" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
+    <marker id="extarrow" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#059669"/>
+    </marker>
+    <marker id="optarrow" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
     </marker>
   </defs>
 
-  <rect class="bg" x="0" y="0" width="820" height="380" rx="16" />
+  <rect class="bg" x="0" y="0" width="880" height="412" rx="16" />
 
-  <!-- Frontend -->
-  <rect class="box" x="50" y="40" width="200" height="70"/>
-  <text class="title" x="150" y="70" text-anchor="middle">Frontend (8000)</text>
-  <text class="text"  x="150" y="90" text-anchor="middle">UI / static app</text>
+  <!-- ===== Client tier ===== -->
+  <rect class="client" x="40" y="44" width="180" height="56"/>
+  <text class="title" x="130" y="77" text-anchor="middle">Browser</text>
 
-  <!-- API -->
-  <rect class="box" x="300" y="40" width="200" height="70"/>
-  <text class="title" x="400" y="70" text-anchor="middle">API Service (8001)</text>
-  <text class="text"  x="400" y="90" text-anchor="middle">LangGraph + Agentic RAG</text>
+  <rect class="box" x="40" y="150" width="180" height="72"/>
+  <text class="title" x="130" y="180" text-anchor="middle">Frontend (8000)</text>
+  <text class="sub"   x="130" y="198" text-anchor="middle">static UI · app.js / i18n</text>
+  <text class="sub"   x="130" y="213" text-anchor="middle">Nginx container</text>
 
-  <!-- Vector service -->
-  <rect class="vec" x="300" y="150" width="200" height="60"/>
-  <text class="title" x="400" y="175" text-anchor="middle">Vector Service (8002)</text>
-  <text class="text"  x="400" y="195" text-anchor="middle">Embeddings + search</text>
+  <!-- ===== API hub ===== -->
+  <rect class="box" x="300" y="138" width="220" height="92"/>
+  <text class="title" x="410" y="168" text-anchor="middle">API Service (8001)</text>
+  <text class="sub"   x="410" y="186" text-anchor="middle">FastAPI</text>
+  <text class="sub"   x="410" y="201" text-anchor="middle">LangGraph Agentic RAG</text>
+  <text class="sub"   x="410" y="216" text-anchor="middle">/ask · /analyze-image · /wiki-export</text>
 
-  <!-- Qdrant -->
-  <rect class="vec" x="550" y="150" width="150" height="60"/>
-  <text class="title" x="625" y="175" text-anchor="middle">Qdrant</text>
-  <text class="text"  x="625" y="195" text-anchor="middle">Vector DB</text>
+  <!-- ===== Data tier (right column) ===== -->
+  <rect class="db" x="600" y="44" width="240" height="66"/>
+  <text class="title" x="720" y="70" text-anchor="middle">PostgreSQL (16)</text>
+  <text class="sub"   x="720" y="88" text-anchor="middle">sessions · messages · prompt_logs</text>
+  <text class="sub"   x="720" y="102" text-anchor="middle">asyncpg · cross-session memory</text>
 
-  <!-- Postgres -->
-  <rect class="db" x="550" y="40" width="150" height="70"/>
-  <text class="title" x="625" y="65" text-anchor="middle">PostgreSQL</text>
-  <text class="text"  x="625" y="85" text-anchor="middle">Sessions / prompt_logs</text>
-  <text class="sub"   x="625" y="100" text-anchor="middle">Cross-session memories</text>
+  <rect class="vec" x="600" y="140" width="240" height="66"/>
+  <text class="title" x="720" y="166" text-anchor="middle">Vector Service (8002)</text>
+  <text class="sub"   x="720" y="184" text-anchor="middle">FastAPI · concept search</text>
+  <text class="sub"   x="720" y="199" text-anchor="middle">OpenAI embeddings (3-small)</text>
 
-  <!-- Memory Flow Legend -->
-  <rect class="mem" x="50" y="250" width="220" height="100"/>
-  <text class="title" x="160" y="275" text-anchor="middle" fill="#059669">Memory Sources</text>
-  <text class="sub" x="160" y="295" text-anchor="middle">1. Vector Search (Qdrant)</text>
-  <text class="sub" x="160" y="312" text-anchor="middle">2. User Memories (PostgreSQL)</text>
-  <text class="sub" x="160" y="329" text-anchor="middle">3. Session History (current)</text>
+  <rect class="vec" x="600" y="236" width="240" height="58"/>
+  <text class="title" x="720" y="262" text-anchor="middle">Qdrant</text>
+  <text class="sub"   x="720" y="280" text-anchor="middle">vector DB · concepts collection</text>
 
-  <!-- LLM Box -->
-  <rect class="box" x="550" y="250" width="200" height="100"/>
-  <text class="title" x="650" y="275" text-anchor="middle">LLM Providers</text>
-  <text class="sub" x="650" y="295" text-anchor="middle">OpenAI / Gemini / Grok</text>
-  <text class="sub" x="650" y="312" text-anchor="middle">Called with retrieved</text>
-  <text class="sub" x="650" y="329" text-anchor="middle">context from all sources</text>
+  <!-- ===== External / outbound tier (bottom) ===== -->
+  <rect class="ext" x="40" y="304" width="230" height="84"/>
+  <text class="title" x="155" y="330" text-anchor="middle" fill="#047857">Wiki Export (Graphify)</text>
+  <text class="sub"   x="155" y="348" text-anchor="middle">graphify CLI · OpenAI backend</text>
+  <text class="sub"   x="155" y="363" text-anchor="middle">zip + HTML</text>
+  <text class="sub"   x="155" y="378" text-anchor="middle">api_data volume (uploads)</text>
 
-  <!-- Arrows -->
-  <line class="arrow" x1="250" y1="75" x2="300" y2="75"/>
-  <line class="arrow" x1="500" y1="75" x2="550" y2="75"/>
-  <line class="arrow" x1="400" y1="110" x2="400" y2="150"/>
-  <line class="arrow" x1="500" y1="180" x2="550" y2="180"/>
+  <rect class="ext" x="300" y="304" width="220" height="84"/>
+  <text class="title" x="410" y="330" text-anchor="middle" fill="#047857">LLM Providers</text>
+  <text class="sub"   x="410" y="348" text-anchor="middle">external HTTPS APIs</text>
+  <text class="sub"   x="410" y="363" text-anchor="middle">OpenAI · Claude · Gemini · Grok</text>
+  <text class="sub"   x="410" y="378" text-anchor="middle">+ GPT-5.5 for LLM-wiki</text>
 
-  <!-- Memory flow arrows (green dashed) -->
-  <line class="mem-arrow" x1="625" y1="110" x2="625" y2="140"/>
-  <line class="mem-arrow" x1="270" y1="300" x2="400" y2="210"/>
-  <line class="mem-arrow" x1="500" y1="75" x2="550" y2="250"/>
+  <rect class="opt" x="600" y="324" width="240" height="64"/>
+  <text class="title" x="720" y="350" text-anchor="middle" fill="#475569">Notion (optional)</text>
+  <text class="sub"   x="720" y="368" text-anchor="middle">daily summary / push integration</text>
 
-  <!-- Labels -->
-  <text class="text" x="275" y="65" text-anchor="middle">HTTP</text>
-  <text class="text" x="525" y="65" text-anchor="middle">SQL</text>
-  <text class="text" x="450" y="135" text-anchor="middle">REST</text>
-  <text class="text" x="525" y="165" text-anchor="middle">REST</text>
+  <!-- ===== Arrows ===== -->
+  <!-- Browser -> Frontend -->
+  <line class="arrow" x1="130" y1="100" x2="130" y2="150"/>
+  <text class="lbl" x="138" y="128" text-anchor="start">HTTP</text>
+
+  <!-- Frontend -> API -->
+  <line class="arrow" x1="220" y1="186" x2="300" y2="186"/>
+  <text class="lbl" x="260" y="178" text-anchor="middle">REST / JSON</text>
+
+  <!-- API -> PostgreSQL -->
+  <path class="arrow" d="M520,162 L600,92"/>
+  <text class="lbl" x="556" y="118" text-anchor="middle">SQL</text>
+
+  <!-- API -> Vector Service -->
+  <path class="arrow" d="M520,186 L600,172"/>
+  <text class="lbl" x="560" y="172" text-anchor="middle">REST</text>
+
+  <!-- Vector Service -> Qdrant -->
+  <line class="arrow" x1="720" y1="206" x2="720" y2="236"/>
+  <text class="lbl" x="730" y="225" text-anchor="start">6333</text>
+
+  <!-- API -> LLM Providers (chat) -->
+  <line class="arrow" x1="410" y1="230" x2="410" y2="304"/>
+  <text class="lbl" x="418" y="270" text-anchor="start">chat calls</text>
+
+  <!-- Vector Service -> LLM Providers (embeddings) -->
+  <polyline class="ext-arrow" points="600,196 548,196 548,300 490,300 490,304"/>
+  <text class="lbl" x="542" y="248" text-anchor="end" fill="#047857">embeddings</text>
+
+  <!-- API -> Wiki Export -->
+  <polyline class="arrow" points="370,230 370,286 155,286 155,304"/>
+  <text class="lbl" x="262" y="278" text-anchor="middle">wiki export</text>
+
+  <!-- API -> Notion (optional) -->
+  <polyline class="opt-arrow" points="520,208 576,208 576,352 600,352"/>
+  <text class="lbl" x="570" y="300" text-anchor="end" fill="#64748b">optional</text>
+
+  <!-- ===== Footer / legend ===== -->
+  <text class="sub" x="40" y="406">Docker network: microservices (bridge) · ports shown in parentheses · green = external APIs · dashed = optional</text>
 </svg>

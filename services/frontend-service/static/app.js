@@ -617,9 +617,10 @@ class SecondBrainApp {
         if (!this.openaiCheck || !this.geminiCheck || !this.grokCheck) return;
 
         if (mode === 'llm-wiki') {
+            // llm-wiki runs solely on the latest OpenAI model.
             this.openaiCheck.checked = true;
-            this.geminiCheck.checked = true;
-            this.grokCheck.checked = true;
+            this.geminiCheck.checked = false;
+            this.grokCheck.checked = false;
             return;
         }
 
@@ -633,7 +634,7 @@ class SecondBrainApp {
         const mode = this.getCurrentModelMode();
         if (mode) {
             this.applyModelMode(mode);
-            if (mode === 'llm-wiki') return ['OpenAI', 'Gemini', 'Grok'];
+            if (mode === 'llm-wiki') return ['OpenAI'];
             return ['OpenAI', 'Grok'];
         }
 
